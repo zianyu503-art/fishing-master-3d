@@ -1,4 +1,6 @@
 .DS_Store
+.wrangler/
+wrangler.jsonc
 __pycache__/
 *.pyc
 

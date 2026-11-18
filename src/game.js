@@ -3,7 +3,11 @@ import { Water } from "three/addons/objects/Water.js";
 import { FishingAudio } from "./audio.js";
 import { loadAllFishingAssets, createWaterNormalTexture } from "./models.js";
 
-const CLOUDFLARE_API_ORIGIN = window.FISHING_CF_API || "";
+const CLOUDFLARE_API_ORIGIN =
+  window.FISHING_CF_API ||
+  (typeof window !== "undefined" && window.location.hostname.endsWith(".workers.dev")
+    ? ""
+    : "https://fishing-master-3d.fishing-master-3d.workers.dev");
 
 const SPECIES_DB = [
   {
@@ -128,8 +132,8 @@ const SPECIES_DB = [
     fightStrength: 1.58,
     staminaDrainRate: 9.8,
     reelSpeed: 2.05,
-    baseGold: 2800,
-    xp: 360,
+    baseGold: 1350,
+    xp: 260,
     spawnWeight: 0.08,
     desc: "體內能釋放高壓藍電流的奇異電鰻！周身放電時切勿強拉，捕獲後電擊武器威力倍增。",
   },
@@ -147,10 +151,10 @@ const SPECIES_DB = [
     fightStrength: 1.75,
     staminaDrainRate: 6.5,
     reelSpeed: 1.65,
-    baseGold: 16000,
-    xp: 1200,
+    baseGold: 2200,
+    xp: 480,
     spawnWeight: 0.06,
-    desc: "誤入翡翠湖的極兇猛頂級獵食者！上鉤後會頻頻撲咬攻擊玩家，必須按「⚡ 電擊反擊」將其電死，成功電殺可賺取超高額賞金！",
+    desc: "誤入翡翠湖的頂級兇猛獵食者！上鉤後會撲咬攻擊玩家，按「⚡ 電擊反擊」將其電死即可收服！",
   },
 ];
 
@@ -193,9 +197,9 @@ export class FishingMasterGame {
     this.activeBaitId = saved.activeBaitId ?? "earthworm";
     this.compendium = saved.compendium ?? {};
     this.localLeaderboard = saved.localLeaderboard ?? [
-      { player_id: "seed-1", player_name: "翡翠老船長", species_id: "great_white_shark", species_name: "狂暴大白鯊", weight_kg: 184.5, coins: 24800, level: 8, total_catches: 31 },
-      { player_id: "seed-2", player_name: "高壓獵人阿強", species_id: "electric_eel", species_name: "巨型電鰻", weight_kg: 16.4, coins: 8420, level: 5, total_catches: 18 },
-      { player_id: "seed-3", player_name: "路亞小柔", species_id: "wels_catfish", species_name: "巨型湖鯰", weight_kg: 22.8, coins: 4650, level: 4, total_catches: 14 },
+      { player_id: "seed-1", player_name: "翡翠老船長", species_id: "great_white_shark", species_name: "狂暴大白鯊", weight_kg: 184.5, coins: 6850, level: 6, total_catches: 24 },
+      { player_id: "seed-2", player_name: "高壓獵人阿強", species_id: "electric_eel", species_name: "巨型電鰻", weight_kg: 16.4, coins: 4220, level: 4, total_catches: 16 },
+      { player_id: "seed-3", player_name: "路亞小柔", species_id: "wels_catfish", species_name: "巨型湖鯰", weight_kg: 22.8, coins: 2850, level: 3, total_catches: 11 },
     ];
     this._saveProgress();
 
@@ -814,6 +818,10 @@ export class FishingMasterGame {
       e.stopPropagation();
       this.audio.init();
       this._vibrate(25);
+      if (this.state === "SHARK_AMBUSH") {
+        this._triggerElectricShock();
+        return;
+      }
       this._handlePrimaryDown();
     });
 
@@ -981,11 +989,31 @@ export class FishingMasterGame {
   }
 
   _triggerElectricShock() {
+    if (this.state === "SHARK_AMBUSH" && this.activeCatch) {
+      this.lightningTimer = 0.45;
+      this.audio.playElectricZap(1.35);
+      this._triggerScreenFX("flash-shock");
+      this._vibrate([35, 20, 50]);
+      if (this.rodCtrl) {
+        const tip = new THREE.Vector3();
+        this.rodCtrl.getTipWorldPosition(tip);
+        const target = this.hookedFishActor ? this.hookedFishActor.group.position : this.bobberRig.position;
+        this._updateLightningBolts(tip, target);
+      }
+      this.ui.strikeRing.style.display = "none";
+      this.ui.strikeRing.classList.remove("shock-qte");
+      this.ui.strikeRing.textContent = "💦 揚竿！";
+      this.ui.promptBanner.classList.remove("urgent");
+      this._showToast("⚡ 瞬間電擊命中！成功電死狂暴大白鯊！");
+      this._completeCatch({ electrocuted: true });
+      return;
+    }
+
     if (this.state !== "FIGHTING" || !this.activeCatch || this.shockCooldown > 0) return;
     const sp = this.activeCatch.species;
     const isShark = sp.id === "great_white_shark";
     const isEel = sp.id === "electric_eel";
-    this.shockCooldown = isShark ? 0.38 : 2.2;
+    this.shockCooldown = isShark ? 1.2 : 2.2;
     this.lightningTimer = 0.30;
 
     this.audio.playElectricZap(isShark ? 1.15 : 0.95);
@@ -1002,21 +1030,10 @@ export class FishingMasterGame {
     this._spawnRipple(this.bobberRig.position.x, this.bobberRig.position.z, 3.6);
 
     if (isShark) {
-      const dmg = this.compendium.electric_eel ? 34 : 25;
-      this.sharkHP = Math.max(0, this.sharkHP - dmg);
-      this.sharkAttackTimer = Math.max(this.sharkAttackTimer, 1.45);
-      this.sharkLunging = false;
+      this.stamina = Math.max(0, this.stamina - 18);
       this.fishStruggling = false;
-      this.tension = Math.max(12, this.tension - 12);
-      if (this.sharkHP <= 0) {
-        this._showToast("⚡ 高壓電擊致命一擊！成功電死狂暴大白鯊！");
-        this._completeCatch({ electrocuted: true });
-        return;
-      }
-      this._setPrompt(
-        `⚡ 高壓電擊命中大白鯊！剩餘血量 ${Math.round(this.sharkHP)}%`,
-        "繼續連按「⚡ 電擊反擊」（或 E 鍵）電死鯊魚領高額賞金！"
-      );
+      this.tension = Math.max(12, this.tension - 16);
+      this._showToast("⚡ 先把大白鯊拉上岸，牠撲過來的瞬間再電死牠！");
     } else if (isEel) {
       this.stamina = Math.max(0, this.stamina - 22);
       this.fishStruggling = false;
@@ -1028,6 +1045,33 @@ export class FishingMasterGame {
       this.tension = Math.max(8, this.tension - 10);
       this._showToast("⚡ 電擊麻痺目標！趁現在收線！");
     }
+  }
+
+  _startSharkAmbush() {
+    this.state = "SHARK_AMBUSH";
+    this.ambushDuration = 1.95;
+    this.ambushTimer = this.ambushDuration;
+    this.ambushStartPos = this.hookedFishActor
+      ? this.hookedFishActor.group.position.clone()
+      : new THREE.Vector3(this.playerPos.x, -0.1, this.playerPos.z - 3.0);
+
+    this.ui.combatPanel.classList.remove("is-visible", "danger-pulse");
+    if (this.ui.bossCombatBars) this.ui.bossCombatBars.classList.remove("is-visible");
+    if (this.ui.distPill) this.ui.distPill.classList.remove("is-visible");
+
+    this.ui.strikeRing.classList.add("shock-qte");
+    this.ui.strikeRing.textContent = "⚡ 瞬間電擊！";
+    this.ui.strikeRing.style.display = "flex";
+    this.ui.promptBanner.classList.add("urgent");
+    this._setPrompt(
+      "🦈 大白鯊衝上岸撲向你！瞬間按「⚡ 電擊」！",
+      "點擊電擊鈕 / 中央藍圈 / 按 E 鍵把牠電死！"
+    );
+
+    this.audio.playSharkAttack();
+    this._triggerScreenFX("flash-bite");
+    this._vibrate([85, 35, 95]);
+    this._spawnSplashBurst(this.ambushStartPos.x, this.ambushStartPos.z, 34, 1.5);
   }
 
   _spawnRipple(x, z, maxScale = 3.2) {
@@ -1108,8 +1152,8 @@ export class FishingMasterGame {
       this._triggerScreenFX("flash-bite");
       this._spawnSplashBurst(this.bobberRig.position.x, this.bobberRig.position.z, 32, 1.5);
       this._setPrompt(
-        "🦈 狂暴大白鯊上鉤！牠會撲咬攻擊你！",
-        "快按右下「⚡ 電擊反擊」（或 E 鍵）電死鯊魚賺超高額金幣！"
+        "🦈 狂暴大白鯊上鉤！拉上岸瞬間小心牠撲向你！",
+        "將牠拉回岸邊時準備瞬間按「⚡ 電擊」！"
       );
     } else if (species.id === "electric_eel") {
       this.audio.playElectricZap(0.7);
@@ -1153,7 +1197,7 @@ export class FishingMasterGame {
       rankBonus = 1.3;
     }
 
-    const killBonus = electrocuted && species.id === "great_white_shark" ? 1.55 : 1.0;
+    const killBonus = electrocuted && species.id === "great_white_shark" ? 1.25 : 1.0;
     const earnedGold = Math.round(species.baseGold * (0.75 + sizeNorm * 0.85) * rankBonus * killBonus);
     const earnedXp = Math.round(species.xp * rankBonus * killBonus);
     this.coins += earnedGold;
@@ -1195,7 +1239,7 @@ export class FishingMasterGame {
     this.ui.catchSpecies.textContent = `${species.name} (${species.enName})`;
     this.ui.catchBadge.textContent =
       electrocuted && species.id === "great_white_shark"
-        ? "⚡ 成功電死大白鯊！獲得 1.55x 巨額賞金！"
+        ? "⚡ 成功電死大白鯊！獲得 1.25x 獵鯊獎勵！"
         : `${species.difficulty} · ${rankLabel}`;
     this.ui.catchBadge.style.color = electrocuted ? "#22d3ee" : species.diffColor;
     this.ui.catchWeight.textContent = `${weightKg.toFixed(2)} kg`;
@@ -1213,6 +1257,8 @@ export class FishingMasterGame {
   _resetToIdle(mainMsg = "長按右下輪盤拋竿", subMsg = "") {
     this.state = "IDLE";
     this.ui.strikeRing.style.display = "none";
+    this.ui.strikeRing.classList.remove("shock-qte");
+    this.ui.strikeRing.textContent = "💦 揚竿！";
     this.ui.promptBanner.classList.remove("urgent");
     this.ui.combatPanel.classList.remove("is-visible", "danger-pulse");
     if (this.ui.bossCombatBars) this.ui.bossCombatBars.classList.remove("is-visible");
@@ -1544,12 +1590,12 @@ export class FishingMasterGame {
       this.ui.btnCancelCast.style.display = showCancel ? "inline-flex" : "none";
     }
     if (this.ui.btnElectricShock) {
-      const fighting = this.state === "FIGHTING";
-      const isShark = fighting && this.activeCatch?.species?.id === "great_white_shark";
-      this.ui.btnElectricShock.classList.toggle("is-visible", fighting);
-      this.ui.btnElectricShock.classList.toggle("urgent-boss", isShark && this.shockCooldown <= 0);
-      this.ui.btnElectricShock.classList.toggle("on-cooldown", this.shockCooldown > 0);
-      this.ui.btnElectricShock.textContent = isShark ? "⚡ 電擊殺鯊" : "⚡ 電擊反擊";
+      const showShock = this.state === "FIGHTING" || this.state === "SHARK_AMBUSH";
+      const isAmbush = this.state === "SHARK_AMBUSH";
+      this.ui.btnElectricShock.classList.toggle("is-visible", showShock);
+      this.ui.btnElectricShock.classList.toggle("urgent-boss", isAmbush);
+      this.ui.btnElectricShock.classList.toggle("on-cooldown", !isAmbush && this.shockCooldown > 0);
+      this.ui.btnElectricShock.textContent = isAmbush ? "⚡ 瞬間電擊殺鯊！" : "⚡ 電擊反擊";
     }
 
     btn.classList.remove("state-idle", "state-charging", "state-waiting", "state-bite", "state-fighting");
@@ -1784,36 +1830,7 @@ export class FishingMasterGame {
       this.shockCooldown = Math.max(0, this.shockCooldown - dt);
 
       if (this.ui.bossCombatBars) {
-        this.ui.bossCombatBars.classList.toggle("is-visible", isShark);
-      }
-      if (isShark) {
-        if (this.ui.sharkHpFill) this.ui.sharkHpFill.style.width = `${Math.round(this.sharkHP)}%`;
-        if (this.ui.sharkHpVal) this.ui.sharkHpVal.textContent = `${Math.round(this.sharkHP)}%`;
-        if (this.ui.playerHpFill) this.ui.playerHpFill.style.width = `${Math.round(this.playerHP)}%`;
-        if (this.ui.playerHpVal) {
-          this.ui.playerHpVal.textContent = `${Math.round(this.playerHP)}%`;
-          this.ui.playerHpVal.style.color = this.playerHP <= 40 ? "#f87171" : "#34d399";
-        }
-        this.sharkAttackTimer -= dt;
-        if (this.sharkAttackTimer <= 0.65 && !this.sharkLunging) {
-          this.sharkLunging = true;
-          this._setPrompt("🦈 大白鯊張嘴撲咬過來了！快按「⚡ 電擊殺鯊」打斷！", "按右邊電擊按鈕或 E 鍵電死大白鯊！");
-        }
-        if (this.sharkAttackTimer <= 0) {
-          this.sharkAttackTimer = 2.6;
-          this.sharkLunging = false;
-          this.playerHP = Math.max(0, this.playerHP - 24);
-          this.audio.playSharkAttack();
-          this._triggerScreenFX("flash-bite");
-          this._vibrate([120, 40, 120]);
-          this._spawnSplashBurst(this.bobberRig.position.x, this.bobberRig.position.z, 26, 1.45);
-          this._showToast(`🦈 大白鯊咬傷了你！（剩餘生命 ${Math.round(this.playerHP)}%）`);
-          if (this.playerHP <= 0) {
-            this._releaseApproachingFish();
-            this._resetToIdle("💥 你被狂暴大白鯊撞翻了！下次快連按「⚡ 電擊殺鯊」把牠電死！", "");
-            return;
-          }
-        }
+        this.ui.bossCombatBars.classList.remove("is-visible");
       }
 
       if (isEel) {
@@ -1853,7 +1870,7 @@ export class FishingMasterGame {
         const tensionRise = (this.fishStruggling ? 52.0 : 24.0) * sp.fightStrength + eelBonusTension;
         this.tension += tensionRise * dt;
         const pullSpeed = sp.reelSpeed * (this.fishStruggling ? 0.52 : 1.18);
-        this.fishDist = Math.max(isShark ? 3.0 : 0.8, this.fishDist - pullSpeed * dt);
+        this.fishDist = Math.max(isShark ? 2.1 : 0.8, this.fishDist - pullSpeed * dt);
         this.stamina = Math.max(0, this.stamina - sp.staminaDrainRate * dt);
         this.audio.tickReel(this.tension / 100);
         if (this.rodCtrl) this.rodCtrl.spinReel(dt, 14.0);
@@ -1875,11 +1892,9 @@ export class FishingMasterGame {
 
       if (this.hookedFishActor) {
         const fg = this.hookedFishActor.group;
-        const jumpY = isShark && this.sharkLunging ? 0.32 + 0.16 * Math.sin(t * 18) : this.fishStruggling ? -0.08 + 0.08 * Math.sin(t * 12) : -0.24;
+        const jumpY = this.fishStruggling ? -0.08 + 0.08 * Math.sin(t * 12) : -0.24;
         fg.position.set(fx, jumpY, fz);
-        fg.rotation.y = isShark && this.sharkLunging
-          ? swayAngle + Math.PI
-          : swayAngle + (this.fishStruggling ? Math.PI + 0.6 * Math.sin(t * 7) : 0.4 * Math.sin(t * 3));
+        fg.rotation.y = swayAngle + (this.fishStruggling ? Math.PI + 0.6 * Math.sin(t * 7) : 0.4 * Math.sin(t * 3));
         this.hookedFishActor.updateSwim(t, this.fishStruggling || isShark ? 15.0 : 7.0, 0.34);
       }
 
@@ -1900,8 +1915,8 @@ export class FishingMasterGame {
       targetBendY = 0.14 + tNorm * 0.42 + (this.fishStruggling ? 0.04 * Math.sin(t * 24) : 0);
       targetBendZ = 0.11 * Math.sin(t * 3.2);
 
-      if (this.fishStruggling || this.tension > 72 || (isShark && this.sharkLunging)) {
-        const shake = (0.012 + tNorm * 0.026) * (this.sharkLunging ? 1.85 : this.fishStruggling ? 1.25 : 0.6);
+      if (this.fishStruggling || this.tension > 72) {
+        const shake = (0.012 + tNorm * 0.026) * (this.fishStruggling ? 1.25 : 0.6);
         this.camera.position.x += (Math.random() - 0.5) * shake;
         this.camera.position.y += (Math.random() - 0.5) * shake;
       }
@@ -1916,8 +1931,40 @@ export class FishingMasterGame {
         this._resetToIdle("💥 張力過高 · 魚線斷裂！按住右下輪盤重新拋竿", "當魚兒掙扎衝刺、張力變紅時，短暫鬆手即可安全降壓");
       } else if (!isShark && (this.fishDist <= 1.55 || (this.stamina <= 0 && this.fishDist <= 4.0))) {
         this._completeCatch();
-      } else if (isShark && (this.sharkHP <= 0 || this.fishDist <= 3.1 && this.stamina <= 0)) {
-        this._completeCatch({ electrocuted: this.sharkHP <= 0 });
+      } else if (isShark && (this.fishDist <= 2.35 || (this.stamina <= 0 && this.fishDist <= 4.6))) {
+        this._startSharkAmbush();
+      }
+    } else if (this.state === "SHARK_AMBUSH") {
+      this.ambushTimer -= dt;
+      const u = THREE.MathUtils.clamp(1 - this.ambushTimer / this.ambushDuration, 0, 1);
+      const forward = new THREE.Vector3(-Math.sin(this.yaw), 0, -Math.cos(this.yaw));
+      const endPos = this.playerPos.clone().addScaledVector(forward, 0.72);
+      endPos.y = this.playerPos.y - 0.36;
+
+      if (this.hookedFishActor) {
+        const fg = this.hookedFishActor.group;
+        fg.position.lerpVectors(this.ambushStartPos, endPos, Math.pow(u, 0.85));
+        fg.position.y += Math.sin(u * Math.PI) * 0.85;
+        fg.rotation.y = this.yaw + Math.PI;
+        fg.rotation.x = 0.25 * Math.cos(u * Math.PI);
+        this.hookedFishActor.updateSwim(t, 20.0, 0.42);
+        this.bobberRig.position.copy(fg.position);
+      }
+
+      targetPivotPitch = 0.62;
+      this.camera.position.x += (Math.random() - 0.5) * 0.032;
+      this.camera.position.y += (Math.random() - 0.5) * 0.032;
+
+      if (this.ambushTimer <= 0) {
+        this.coins = Math.max(0, this.coins - 120);
+        this._saveProgress();
+        this._refreshTopHUD();
+        this.audio.playSharkAttack();
+        this._triggerScreenFX("flash-bite");
+        this._vibrate([140, 50, 140]);
+        this._showToast("💥 被上岸撲咬的大白鯊撞傷！損失 120 金幣！");
+        this._releaseApproachingFish();
+        this._resetToIdle("🦈 慢了一步！大白鯊上岸撲咬後掙脫逃走了，下次瞬間按「⚡ 電擊」！", "");
       }
     }
 
