@@ -1,0 +1,9 @@
+{
+  "name": "釣魚大師 3D — 翡翠湖觸屏版",
+  "short_name": "釣魚大師3D",
+  "start_url": "./index.html",
+  "display": "fullscreen",
+  "orientation": "any",
+  "background_color": "#06111f",
+  "theme_color": "#06111f"
+}

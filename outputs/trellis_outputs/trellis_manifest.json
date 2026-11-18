@@ -1,0 +1,79 @@
+[
+  {
+    "asset_name": "wooden_pier",
+    "label": "木製碼頭 (Wooden Pier)",
+    "glb_size_mb": 1.67,
+    "vertices": 10397,
+    "faces": 12025
+  },
+  {
+    "asset_name": "pine_tree",
+    "label": "湖畔松樹 (Lakeside Pine Tree)",
+    "glb_size_mb": 2.78,
+    "vertices": 46615,
+    "faces": 42229
+  },
+  {
+    "asset_name": "lakeside_rock",
+    "label": "湖岸青苔岩石 (Lakeside Mossy Rock)",
+    "glb_size_mb": 2.04,
+    "vertices": 16824,
+    "faces": 25507
+  },
+  {
+    "asset_name": "first_person_hands",
+    "label": "第一人稱釣手雙手 (First-Person Hands)",
+    "glb_size_mb": 1.73,
+    "vertices": 19778,
+    "faces": 29528
+  },
+  {
+    "asset_name": "fishing_rod",
+    "label": "紡車魚竿含捲線器 (Spinning Fishing Rod)",
+    "glb_size_mb": 1.04,
+    "vertices": 1399,
+    "faces": 1492
+  },
+  {
+    "asset_name": "fishing_bobber",
+    "label": "紅白浮標 (Fishing Bobber)",
+    "glb_size_mb": 0.89,
+    "vertices": 1782,
+    "faces": 2624
+  },
+  {
+    "asset_name": "earthworm_bait",
+    "label": "蚯蚓魚餌與魚鉤 (Earthworm Bait on Hook)",
+    "glb_size_mb": 1.51,
+    "vertices": 8792,
+    "faces": 13016
+  },
+  {
+    "asset_name": "largemouth_bass",
+    "label": "鱸魚 (Largemouth Bass · 0.5-3 kg)",
+    "glb_size_mb": 1.5,
+    "vertices": 3499,
+    "faces": 5276
+  },
+  {
+    "asset_name": "common_carp",
+    "label": "鯉魚 (Common Carp · 1-8 kg)",
+    "glb_size_mb": 1.41,
+    "vertices": 3714,
+    "faces": 5124
+  },
+  {
+    "asset_name": "northern_pike",
+    "label": "狗魚 (Northern Pike · 3-15 kg)",
+    "glb_size_mb": 1.08,
+    "vertices": 2182,
+    "faces": 3176
+  },
+  {
+    "asset_name": "gold_coin",
+    "label": "釣魚獎勵金幣 (Reward Gold Coin)",
+    "glb_size_mb": 1.52,
+    "vertices": 5638,
+    "faces": 10044
+  }
+]

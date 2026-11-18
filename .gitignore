@@ -1,0 +1,28 @@
+.DS_Store
+__pycache__/
+*.pyc
+
+# Heavy Colab raw outputs not loaded at runtime
+outputs/emerald_lake_map/
+outputs/trellis_outputs/*/*.ply
+outputs/trellis_outputs/*/*.mp4
+outputs/trellis_outputs/*/*_views.png
+outputs/trellis_outputs/first_person_hands/
+outputs/trellis_outputs/fishing_rod/
+outputs/trellis_outputs/largemouth_bass/
+outputs/trellis_outputs/common_carp/
+outputs/trellis_outputs/northern_pike/
+outputs/trellis_outputs/pine_tree/
+outputs/trellis_outputs/lakeside_rock/
+
+# Unused HF raw archives (runtime uses outputs/tailorrig/ + selected scene props)
+outputs/hf_assets/fishing-boat-6e33005f.glb
+outputs/hf_assets/fps-arms-08ec4403.glb
+outputs/hf_assets/fps-arms-with-advanced-rig-81706ab4.glb
+outputs/hf_assets/rigged-arms-76f4c7ae.glb
+
+# Keep only the 3 runtime compendium thumbnails in refs/
+refs/*
+!refs/largemouth_bass_ref.png
+!refs/common_carp_ref.png
+!refs/northern_pike_ref.png
