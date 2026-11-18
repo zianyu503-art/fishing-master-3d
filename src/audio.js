@@ -213,4 +213,54 @@ export class FishingAudio {
       osc.stop(t0 + 0.46);
     });
   }
+
+  playElectricZap(intensity = 1.0) {
+    if (!this.enabled || !this.ctx) return;
+    const now = this.ctx.currentTime;
+
+    const osc = this.ctx.createOscillator();
+    osc.type = "sawtooth";
+    osc.frequency.setValueAtTime(1650 * intensity, now);
+    osc.frequency.exponentialRampToValueAtTime(210, now + 0.14);
+    const og = this.ctx.createGain();
+    og.gain.setValueAtTime(0.16 * intensity, now);
+    og.gain.exponentialRampToValueAtTime(0.001, now + 0.16);
+    osc.connect(og);
+    og.connect(this.ctx.destination);
+    osc.start(now);
+    osc.stop(now + 0.17);
+
+    const src = this.ctx.createBufferSource();
+    src.buffer = this._noiseBuffer(0.24);
+    const filter = this.ctx.createBiquadFilter();
+    filter.type = "bandpass";
+    filter.frequency.setValueAtTime(2400, now);
+    filter.frequency.exponentialRampToValueAtTime(750, now + 0.22);
+    filter.Q.value = 3.2;
+    const ng = this.ctx.createGain();
+    ng.gain.setValueAtTime(0.24 * intensity, now);
+    ng.gain.exponentialRampToValueAtTime(0.001, now + 0.23);
+    src.connect(filter);
+    filter.connect(ng);
+    ng.connect(this.ctx.destination);
+    src.start(now);
+    src.stop(now + 0.24);
+  }
+
+  playSharkAttack() {
+    if (!this.enabled || !this.ctx) return;
+    this.playSplash(1.1);
+    const now = this.ctx.currentTime;
+    const sub = this.ctx.createOscillator();
+    sub.type = "sawtooth";
+    sub.frequency.setValueAtTime(135, now);
+    sub.frequency.exponentialRampToValueAtTime(38, now + 0.34);
+    const g = this.ctx.createGain();
+    g.gain.setValueAtTime(0.32, now);
+    g.gain.exponentialRampToValueAtTime(0.001, now + 0.36);
+    sub.connect(g);
+    g.connect(this.ctx.destination);
+    sub.start(now);
+    sub.stop(now + 0.37);
+  }
 }

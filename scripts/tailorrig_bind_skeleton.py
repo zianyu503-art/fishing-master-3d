@@ -379,10 +379,79 @@ def prepare_tailorrig_arms():
     print(f"Prepared TailorRig FPS arms: {out.name} (49 joints, left/right 5-finger kinematic chains)")
 
 
+def rig_world_fish(species_id: str, z_stretch: float = 1.0):
+    """Normalizes `codepawl/world-fish-glb` meshes (+X snout -> +Z snout, length = 1.0) and binds 9-joint TailorRig skin."""
+    src = HF_DIR / "world_fish" / f"{species_id}.glb"
+    gltf, blob = load_glb(src)
+    prim = gltf["meshes"][0]["primitives"][0]
+    pts = read_vec3_accessor(gltf, blob, prim["attributes"]["POSITION"])
+
+    # world-fish-glb uses +X snout, -X tail -> R_y(-90°): (x, y, z) -> (-z, y, x) maps +X -> +Z snout
+    rot = [[-p[2], p[1], p[0]] for p in pts]
+    xs = [p[0] for p in rot]
+    ys = [p[1] for p in rot]
+    zs = [p[2] for p in rot]
+    cx = (min(xs) + max(xs)) * 0.5
+    cy = (min(ys) + max(ys)) * 0.5
+    cz = (min(zs) + max(zs)) * 0.5
+    z_span = max(max(zs) - min(zs), 1e-4)
+    xy_scale = 1.0 / (z_span * z_stretch)
+    z_scale = 1.0 / z_span
+
+    norm_pts = [[(p[0] - cx) * xy_scale, (p[1] - cy) * xy_scale, (p[2] - cz) * z_scale] for p in rot]
+    write_vec3_accessor_in_place(gltf, blob, prim["attributes"]["POSITION"], norm_pts)
+
+    if "NORMAL" in prim["attributes"]:
+        nrms = read_vec3_accessor(gltf, blob, prim["attributes"]["NORMAL"])
+        rot_n = []
+        for n in nrms:
+            nx, ny, nz = -n[2], n[1], n[0] * z_stretch
+            mag = math.sqrt(nx * nx + ny * ny + nz * nz) or 1.0
+            rot_n.append([nx / mag, ny / mag, nz / mag])
+        write_vec3_accessor_in_place(gltf, blob, prim["attributes"]["NORMAL"], rot_n)
+
+    for mat in gltf.get("materials", []):
+        pbr = mat.setdefault("pbrMetallicRoughness", {})
+        pbr["metallicFactor"] = 0.05
+        pbr["roughnessFactor"] = 0.42
+
+    joints = [
+        {"name": "fish_root",     "parent": -1, "pos": (0.0,  0.00,  0.14), "chain": "spine"},
+        {"name": "head",          "parent":  0, "pos": (0.0,  0.00,  0.38), "chain": "spine"},
+        {"name": "spine_01",      "parent":  0, "pos": (0.0,  0.00, -0.03), "chain": "spine"},
+        {"name": "spine_02",      "parent":  2, "pos": (0.0,  0.00, -0.20), "chain": "spine"},
+        {"name": "tail_peduncle", "parent":  3, "pos": (0.0,  0.00, -0.35), "chain": "spine"},
+        {"name": "caudal_fin",    "parent":  4, "pos": (0.0,  0.00, -0.49), "chain": "spine"},
+        {"name": "dorsal_fin",    "parent":  2, "pos": (0.0,  0.14, -0.05), "chain": "dorsal_aux"},
+        {"name": "pectoral_l",    "parent":  0, "pos": (0.09, -0.07, 0.12), "chain": "pec_l_aux"},
+        {"name": "pectoral_r",    "parent":  0, "pos": (-0.09, -0.07, 0.12), "chain": "pec_r_aux"},
+    ]
+
+    def classify_fish_vertex(v):
+        x, y, z = v
+        if y > 0.105 and -0.26 <= z <= 0.16:
+            return "dorsal_aux"
+        if x > 0.055 and y < -0.015 and -0.02 <= z <= 0.28:
+            return "pec_l_aux"
+        if x < -0.055 and y < -0.015 and -0.02 <= z <= 0.28:
+            return "pec_r_aux"
+        return "spine"
+
+    bind_tailorrig_skeleton(gltf, blob, joints, classify_fish_vertex, sigma=0.12)
+    out = TRIG_OUT / f"{species_id}_tailorrig.glb"
+    save_glb(out, gltf, blob)
+    print(f"Created TailorRig HF world-fish: {out.name} ({len(joints)} joints, 4 chains)")
+
+
 if __name__ == "__main__":
     rig_fishing_rod()
     rig_fish("largemouth_bass", rotate_x_neg_to_z_pos=True)
     rig_fish("common_carp", rotate_x_neg_to_z_pos=True)
     rig_fish("northern_pike", rotate_x_neg_to_z_pos=False)
     prepare_tailorrig_arms()
+    rig_world_fish("rainbow_trout", z_stretch=1.0)
+    rig_world_fish("wels_catfish", z_stretch=1.0)
+    rig_world_fish("golden_arowana", z_stretch=1.0)
+    rig_world_fish("electric_eel", z_stretch=1.50)
+    rig_world_fish("great_white_shark", z_stretch=1.0)
     print("=== All TailorRig SkinnedMesh .glb assets built successfully! ===")

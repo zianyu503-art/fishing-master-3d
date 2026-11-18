@@ -100,6 +100,11 @@ export async function loadAllFishingAssets(onProgress) {
     ["bassRigged", "outputs/tailorrig/largemouth_bass_tailorrig.glb", "gltf"],
     ["carpRigged", "outputs/tailorrig/common_carp_tailorrig.glb", "gltf"],
     ["pikeRigged", "outputs/tailorrig/northern_pike_tailorrig.glb", "gltf"],
+    ["troutRigged", "outputs/tailorrig/rainbow_trout_tailorrig.glb", "gltf"],
+    ["catfishRigged", "outputs/tailorrig/wels_catfish_tailorrig.glb", "gltf"],
+    ["arowanaRigged", "outputs/tailorrig/golden_arowana_tailorrig.glb", "gltf"],
+    ["eelRigged", "outputs/tailorrig/electric_eel_tailorrig.glb", "gltf"],
+    ["sharkRigged", "outputs/tailorrig/great_white_shark_tailorrig.glb", "gltf"],
     // Core TRELLIS Game Props
     ["pier", "outputs/trellis_outputs/wooden_pier/wooden_pier.glb", "gltf"],
     ["bobber", "outputs/trellis_outputs/fishing_bobber/fishing_bobber.glb", "gltf"],
@@ -144,6 +149,11 @@ export async function loadAllFishingAssets(onProgress) {
       largemouth_bass: () => createTailorRigFishActor(raw.bassRigged, 0.66),
       common_carp: () => createTailorRigFishActor(raw.carpRigged, 0.82),
       northern_pike: () => createTailorRigFishActor(raw.pikeRigged, 1.15),
+      rainbow_trout: () => createTailorRigFishActor(raw.troutRigged, 0.72),
+      wels_catfish: () => createTailorRigFishActor(raw.catfishRigged, 1.35),
+      golden_arowana: () => createTailorRigFishActor(raw.arowanaRigged, 0.85),
+      electric_eel: () => createTailorRigFishActor(raw.eelRigged, 1.45),
+      great_white_shark: () => createTailorRigFishActor(raw.sharkRigged, 2.85),
     },
   };
 }

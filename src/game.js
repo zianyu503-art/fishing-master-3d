@@ -3,11 +3,14 @@ import { Water } from "three/addons/objects/Water.js";
 import { FishingAudio } from "./audio.js";
 import { loadAllFishingAssets, createWaterNormalTexture } from "./models.js";
 
+const CLOUDFLARE_API_ORIGIN = window.FISHING_CF_API || "";
+
 const SPECIES_DB = [
   {
     id: "largemouth_bass",
     name: "鱸魚",
     enName: "Largemouth Bass",
+    thumb: "./refs/largemouth_bass_ref.png",
     difficulty: "容易",
     diffColor: "#34d399",
     minKg: 0.5,
@@ -18,13 +21,32 @@ const SPECIES_DB = [
     reelSpeed: 3.5,
     baseGold: 95,
     xp: 35,
-    spawnWeight: 0.48,
+    spawnWeight: 0.34,
     desc: "棲息於翡翠湖淺灘與木樁暗影處的掠食魚類，咬訊乾脆，適合新手練習控線手感。",
+  },
+  {
+    id: "rainbow_trout",
+    name: "虹鱒",
+    enName: "Rainbow Trout",
+    thumb: "./refs/rainbow_trout_ref.webp",
+    difficulty: "普通",
+    diffColor: "#38bdf8",
+    minKg: 0.8,
+    maxKg: 5.5,
+    weightPower: 1.4,
+    fightStrength: 0.95,
+    staminaDrainRate: 17.5,
+    reelSpeed: 3.0,
+    baseGold: 165,
+    xp: 55,
+    spawnWeight: 0.22,
+    desc: "來自 Hugging Face 世界魚類庫的冷水迴游魚種，體側帶有彩虹斑紋且躍水洗鰓極為靈活。",
   },
   {
     id: "common_carp",
     name: "鯉魚",
     enName: "Common Carp",
+    thumb: "./refs/common_carp_ref.png",
     difficulty: "普通",
     diffColor: "#fbbf24",
     minKg: 1.0,
@@ -33,34 +55,110 @@ const SPECIES_DB = [
     fightStrength: 1.08,
     staminaDrainRate: 15.0,
     reelSpeed: 2.7,
-    baseGold: 190,
-    xp: 65,
-    spawnWeight: 0.34,
+    baseGold: 210,
+    xp: 70,
+    spawnWeight: 0.18,
     desc: "體型厚實飽滿的底棲魚種，耐力持久且喜歡貼底發力拉扯魚線。",
+  },
+  {
+    id: "golden_arowana",
+    name: "傳奇金龍魚",
+    enName: "Asian Arowana",
+    thumb: "./refs/golden_arowana_ref.webp",
+    difficulty: "稀有",
+    diffColor: "#f59e0b",
+    minKg: 1.8,
+    maxKg: 8.5,
+    weightPower: 1.5,
+    fightStrength: 1.24,
+    staminaDrainRate: 13.0,
+    reelSpeed: 2.5,
+    baseGold: 980,
+    xp: 180,
+    spawnWeight: 0.09,
+    desc: "鱗片閃耀金色光澤的稀有觀賞魚皇，身價極高，上鉤後擅長暴衝躍出水面。",
   },
   {
     id: "northern_pike",
     name: "狗魚",
     enName: "Northern Pike",
+    thumb: "./refs/northern_pike_ref.png",
     difficulty: "困難",
     diffColor: "#f87171",
     minKg: 3.0,
     maxKg: 15.0,
     weightPower: 1.55,
-    fightStrength: 1.46,
+    fightStrength: 1.42,
     staminaDrainRate: 10.5,
     reelSpeed: 2.15,
-    baseGold: 420,
+    baseGold: 440,
     xp: 130,
-    spawnWeight: 0.18,
-    desc: "翡翠湖深水區的頂級掠食霸主，爆發衝刺極猛，衝刺期間強行收線極易斷線！",
+    spawnWeight: 0.09,
+    desc: "翡翠湖深水區的兇猛掠食霸主，爆發衝刺極猛，衝刺期間強行收線極易斷線！",
+  },
+  {
+    id: "wels_catfish",
+    name: "巨型湖鯰",
+    enName: "Wels Catfish",
+    thumb: "./refs/wels_catfish_ref.webp",
+    difficulty: "困難",
+    diffColor: "#fb923c",
+    minKg: 4.0,
+    maxKg: 32.0,
+    weightPower: 1.6,
+    fightStrength: 1.52,
+    staminaDrainRate: 9.2,
+    reelSpeed: 1.95,
+    baseGold: 760,
+    xp: 210,
+    spawnWeight: 0.07,
+    desc: "潛伏於翡翠湖深坑底部的巨無霸鯰魚，極為沉重，非常容易打破重量排行榜紀錄。",
+  },
+  {
+    id: "electric_eel",
+    name: "巨型電鰻",
+    enName: "Electric Eel",
+    thumb: "./refs/electric_eel_ref.webp",
+    difficulty: "極稀有",
+    diffColor: "#22d3ee",
+    isElectric: true,
+    minKg: 3.5,
+    maxKg: 22.0,
+    weightPower: 1.5,
+    fightStrength: 1.58,
+    staminaDrainRate: 9.8,
+    reelSpeed: 2.05,
+    baseGold: 2800,
+    xp: 360,
+    spawnWeight: 0.08,
+    desc: "體內能釋放高壓藍電流的奇異電鰻！周身放電時切勿強拉，捕獲後電擊武器威力倍增。",
+  },
+  {
+    id: "great_white_shark",
+    name: "狂暴大白鯊",
+    enName: "Great White Shark",
+    thumb: "./refs/great_white_shark_ref.webp",
+    difficulty: "傳說首領",
+    diffColor: "#ef4444",
+    isBoss: true,
+    minKg: 65.0,
+    maxKg: 360.0,
+    weightPower: 1.4,
+    fightStrength: 1.75,
+    staminaDrainRate: 6.5,
+    reelSpeed: 1.65,
+    baseGold: 16000,
+    xp: 1200,
+    spawnWeight: 0.06,
+    desc: "誤入翡翠湖的極兇猛頂級獵食者！上鉤後會頻頻撲咬攻擊玩家，必須按「⚡ 電擊反擊」將其電死，成功電殺可賺取超高額賞金！",
   },
 ];
 
 const BAITS = [
-  { id: "earthworm", name: "蚯蚓", bonusPike: 1.0, biteSpeed: 1.0, cost: 0, desc: "萬用自然活餌，三種魚類皆會咬鉤" },
-  { id: "corn_dough", name: "香甜玉米餌", bonusCarp: 1.8, bonusPike: 0.6, biteSpeed: 1.2, cost: 150, desc: "大幅提升大體型鯉魚咬鉤機率" },
-  { id: "minnow_lure", name: "擬真小魚餌", bonusPike: 2.6, bonusBass: 1.4, biteSpeed: 1.15, cost: 350, desc: "專攻大口黑鱸與巨型狗魚" },
+  { id: "earthworm", name: "蚯蚓", bonusPike: 1.0, biteSpeed: 1.0, cost: 0, desc: "萬用自然活餌，全魚種皆有幾率咬鉤" },
+  { id: "corn_dough", name: "香甜玉米餌", bonusCarp: 1.9, bonusTrout: 1.4, bonusArowana: 1.5, biteSpeed: 1.2, cost: 150, desc: "大幅提升鯉魚、虹鱒與金龍魚上鉤機率" },
+  { id: "minnow_lure", name: "擬真小魚餌", bonusPike: 2.4, bonusBass: 1.4, bonusCatfish: 1.6, biteSpeed: 1.15, cost: 350, desc: "專攻大口黑鱸、狗魚與巨型湖鯰" },
+  { id: "blood_chum", name: "深海血腥餌", bonusShark: 3.8, bonusEel: 2.8, bonusCatfish: 1.8, biteSpeed: 1.25, cost: 600, desc: "誘引狂暴大白鯊與高壓電鰻現身的獵殺特調餌" },
 ];
 
 const ENV_ORDER = ["lakeside", "pier", "alpine"];
@@ -85,13 +183,21 @@ export class FishingMasterGame {
     this.canvasWrap = document.getElementById("game-viewport");
     this.ui = this._bindUI();
 
-    // Persistent progression
+    // Persistent progression & angler profile
     const saved = this._loadSave();
+    this.playerId = saved.playerId || (typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : `angler-${Date.now()}-${Math.floor(Math.random() * 9999)}`);
+    this.playerName = saved.playerName || `翡翠釣客#${1000 + Math.floor(Math.random() * 8999)}`;
     this.coins = saved.coins ?? 1250;
     this.xp = saved.xp ?? 0;
     this.unlockedBaits = new Set(saved.unlockedBaits ?? ["earthworm"]);
     this.activeBaitId = saved.activeBaitId ?? "earthworm";
     this.compendium = saved.compendium ?? {};
+    this.localLeaderboard = saved.localLeaderboard ?? [
+      { player_id: "seed-1", player_name: "翡翠老船長", species_id: "great_white_shark", species_name: "狂暴大白鯊", weight_kg: 184.5, coins: 24800, level: 8, total_catches: 31 },
+      { player_id: "seed-2", player_name: "高壓獵人阿強", species_id: "electric_eel", species_name: "巨型電鰻", weight_kg: 16.4, coins: 8420, level: 5, total_catches: 18 },
+      { player_id: "seed-3", player_name: "路亞小柔", species_id: "wels_catfish", species_name: "巨型湖鯰", weight_kg: 22.8, coins: 4650, level: 4, total_catches: 14 },
+    ];
+    this._saveProgress();
 
     // Gameplay state machine: LOADING | IDLE | CHARGING | FLYING | WAITING | APPROACHING | NIBBLE | BITE | FIGHTING | SHOWCASE
     this.state = "LOADING";
@@ -106,6 +212,17 @@ export class FishingMasterGame {
     this.fishStruggling = false;
     this.struggleCycleTimer = 0;
     this.activeCatch = null;
+
+    // Shark Attack & High-Voltage Electric Shock combat state
+    this.playerHP = 100;
+    this.sharkHP = 100;
+    this.sharkAttackTimer = 2.4;
+    this.sharkLunging = false;
+    this.eelShockTimer = 2.5;
+    this.eelShockActive = false;
+    this.shockCooldown = 0;
+    this.lightningTimer = 0;
+    this.lightningArcs = [];
 
     // Environment state
     this.envIndex = 0;
@@ -168,8 +285,16 @@ export class FishingMasterGame {
       strikeRing: $("strike-qte"),
       btnAudio: $("btn-audio"),
       btnBook: $("btn-compendium"),
+      btnLeaderboard: $("btn-leaderboard"),
       btnBait: $("btn-bait-shop"),
       btnEnvSwitch: $("btn-env-switch"),
+      fxOverlay: $("fx-overlay"),
+      bossCombatBars: $("boss-combat-bars"),
+      sharkHpFill: $("bar-shark-hp"),
+      sharkHpVal: $("val-shark-hp"),
+      playerHpFill: $("bar-player-hp"),
+      playerHpVal: $("val-player-hp"),
+      btnElectricShock: $("btn-electric-shock"),
       joystickZone: $("joystick-zone"),
       joystickKnob: $("joystick-knob"),
       btnTouchAction: $("btn-touch-action"),
@@ -208,11 +333,14 @@ export class FishingMasterGame {
       localStorage.setItem(
         "fishing_master_3d_save_v1",
         JSON.stringify({
+          playerId: this.playerId,
+          playerName: this.playerName,
           coins: this.coins,
           xp: this.xp,
           unlockedBaits: Array.from(this.unlockedBaits),
           activeBaitId: this.activeBaitId,
           compendium: this.compendium,
+          localLeaderboard: this.localLeaderboard,
         })
       );
     } catch {
@@ -318,6 +446,24 @@ export class FishingMasterGame {
       m.visible = false;
       this.scene.add(m);
       this.splashParticles.push({ mesh: m, vel: new THREE.Vector3(), life: 0 });
+    }
+
+    // 3D High-Voltage Lightning Arcs (`THREE.Line` jagged cyan/white bolts)
+    this.lightningPtsCount = 10;
+    for (let i = 0; i < 3; i++) {
+      const pts = new Float32Array(this.lightningPtsCount * 3);
+      const geo = new THREE.BufferGeometry();
+      geo.setAttribute("position", new THREE.BufferAttribute(pts, 3));
+      const mat = new THREE.LineBasicMaterial({
+        color: i === 0 ? 0xe0f2fe : 0x22d3ee,
+        transparent: true,
+        opacity: 0.95,
+      });
+      const bolt = new THREE.Line(geo, mat);
+      bolt.frustumCulled = false;
+      bolt.visible = false;
+      this.scene.add(bolt);
+      this.lightningArcs.push(bolt);
     }
   }
 
@@ -495,17 +641,23 @@ export class FishingMasterGame {
       this.scene.add(reeds);
     });
 
-    // 7. Spawn 14 Live TailorRig Skinned Underwater Fish cruising visibly beneath the water
+    // 7. Spawn 18 Live TailorRig Skinned Underwater Fish across all 8 species (including Shark & Electric Eel!)
     const poolSpec = [
-      "largemouth_bass", "largemouth_bass", "largemouth_bass", "largemouth_bass", "largemouth_bass", "largemouth_bass",
-      "common_carp", "common_carp", "common_carp", "common_carp", "common_carp",
-      "northern_pike", "northern_pike", "northern_pike",
+      "largemouth_bass", "largemouth_bass", "largemouth_bass",
+      "rainbow_trout", "rainbow_trout", "rainbow_trout",
+      "common_carp", "common_carp",
+      "golden_arowana", "golden_arowana",
+      "northern_pike", "northern_pike",
+      "wels_catfish", "wels_catfish",
+      "electric_eel", "electric_eel",
+      "great_white_shark", "great_white_shark",
     ];
     poolSpec.forEach((specId, idx) => {
       const actor = this.assets.fishFactory[specId]();
-      const homeX = (Math.random() - 0.5) * 26;
-      const homeZ = 22.0 - Math.random() * 24.0;
-      const depth = -0.48 - Math.random() * 1.1;
+      const homeX = (Math.random() - 0.5) * 28;
+      const isDeep = specId === "great_white_shark" || specId === "wels_catfish";
+      const homeZ = isDeep ? 12.0 - Math.random() * 16.0 : 22.0 - Math.random() * 24.0;
+      const depth = specId === "great_white_shark" ? -0.95 - Math.random() * 0.7 : -0.45 - Math.random() * 1.1;
       actor.group.position.set(homeX, depth, homeZ);
       const heading = Math.random() * Math.PI * 2;
       actor.group.rotation.y = heading;
@@ -514,7 +666,7 @@ export class FishingMasterGame {
         specId,
         actor,
         depth,
-        speed: 0.85 + Math.random() * 0.75,
+        speed: specId === "great_white_shark" ? 1.45 + Math.random() * 0.6 : 0.85 + Math.random() * 0.75,
         turnTarget: heading,
         turnTimer: 1 + Math.random() * 3,
         phaseOffset: idx * 1.7,
@@ -551,6 +703,8 @@ export class FishingMasterGame {
       this.keys[e.code] = true;
       if (e.code === "Space" && !e.repeat) {
         this._handlePrimaryDown();
+      } else if (e.code === "KeyE" && !e.repeat) {
+        this._triggerElectricShock();
       }
     });
     window.addEventListener("keyup", (e) => {
@@ -697,7 +851,18 @@ export class FishingMasterGame {
     };
 
     this.ui.btnBook.onclick = () => this._openCompendiumDrawer();
+    if (this.ui.btnLeaderboard) {
+      this.ui.btnLeaderboard.onclick = () => this._openLeaderboardDrawer("trophy", "all");
+    }
     this.ui.btnBait.onclick = () => this._openBaitDrawer();
+    if (this.ui.btnElectricShock) {
+      this.ui.btnElectricShock.addEventListener("pointerdown", (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        this.audio.init();
+        this._triggerElectricShock();
+      });
+    }
     this.ui.btnDrawerClose.onclick = () => {
       this.ui.drawerModal.style.display = "none";
     };
@@ -767,8 +932,13 @@ export class FishingMasterGame {
     const weights = SPECIES_DB.map((sp) => {
       let w = sp.spawnWeight;
       if (sp.id === "largemouth_bass" && bait.bonusBass) w *= bait.bonusBass;
+      if (sp.id === "rainbow_trout" && bait.bonusTrout) w *= bait.bonusTrout;
       if (sp.id === "common_carp") w *= (bait.bonusCarp || 1.0) * (this.fishDist > 15 ? 1.25 : 1.0);
+      if (sp.id === "golden_arowana") w *= (bait.bonusArowana || 1.0) * (this.fishDist > 14 ? 1.3 : 1.0);
       if (sp.id === "northern_pike") w *= (bait.bonusPike || 1.0) * deepBonus;
+      if (sp.id === "wels_catfish") w *= (bait.bonusCatfish || 1.0) * deepBonus;
+      if (sp.id === "electric_eel") w *= (bait.bonusEel || 1.0) * deepBonus;
+      if (sp.id === "great_white_shark") w *= (bait.bonusShark || 1.0) * (this.fishDist > 18 ? 1.75 : 0.75);
       return w;
     });
     const sum = weights.reduce((a, b) => a + b, 0);
@@ -778,6 +948,86 @@ export class FishingMasterGame {
       if (r <= 0) return SPECIES_DB[i];
     }
     return SPECIES_DB[0];
+  }
+
+  _triggerScreenFX(cls) {
+    if (!this.ui.fxOverlay) return;
+    this.ui.fxOverlay.classList.remove("flash-bite", "flash-shock");
+    void this.ui.fxOverlay.offsetWidth;
+    this.ui.fxOverlay.classList.add(cls);
+    clearTimeout(this._fxTimer);
+    this._fxTimer = setTimeout(() => {
+      this.ui.fxOverlay?.classList.remove("flash-bite", "flash-shock");
+    }, 240);
+  }
+
+  _updateLightningBolts(fromVec, toVec) {
+    for (const bolt of this.lightningArcs) {
+      bolt.visible = true;
+      const attr = bolt.geometry.attributes.position;
+      for (let i = 0; i < this.lightningPtsCount; i++) {
+        const u = i / (this.lightningPtsCount - 1);
+        const midEnv = Math.sin(u * Math.PI);
+        const jitter = 0.55 * midEnv;
+        attr.setXYZ(
+          i,
+          THREE.MathUtils.lerp(fromVec.x, toVec.x, u) + (Math.random() - 0.5) * jitter,
+          THREE.MathUtils.lerp(fromVec.y, toVec.y, u) + (Math.random() - 0.5) * jitter * 0.8,
+          THREE.MathUtils.lerp(fromVec.z, toVec.z, u) + (Math.random() - 0.5) * jitter
+        );
+      }
+      attr.needsUpdate = true;
+    }
+  }
+
+  _triggerElectricShock() {
+    if (this.state !== "FIGHTING" || !this.activeCatch || this.shockCooldown > 0) return;
+    const sp = this.activeCatch.species;
+    const isShark = sp.id === "great_white_shark";
+    const isEel = sp.id === "electric_eel";
+    this.shockCooldown = isShark ? 0.38 : 2.2;
+    this.lightningTimer = 0.30;
+
+    this.audio.playElectricZap(isShark ? 1.15 : 0.95);
+    this._triggerScreenFX("flash-shock");
+    this._vibrate([25, 18, 35]);
+
+    if (this.rodCtrl) {
+      const tip = new THREE.Vector3();
+      this.rodCtrl.getTipWorldPosition(tip);
+      const target = this.hookedFishActor ? this.hookedFishActor.group.position : this.bobberRig.position;
+      this._updateLightningBolts(tip, target);
+    }
+    this._spawnSplashBurst(this.bobberRig.position.x, this.bobberRig.position.z, 18, 1.1);
+    this._spawnRipple(this.bobberRig.position.x, this.bobberRig.position.z, 3.6);
+
+    if (isShark) {
+      const dmg = this.compendium.electric_eel ? 34 : 25;
+      this.sharkHP = Math.max(0, this.sharkHP - dmg);
+      this.sharkAttackTimer = Math.max(this.sharkAttackTimer, 1.45);
+      this.sharkLunging = false;
+      this.fishStruggling = false;
+      this.tension = Math.max(12, this.tension - 12);
+      if (this.sharkHP <= 0) {
+        this._showToast("⚡ 高壓電擊致命一擊！成功電死狂暴大白鯊！");
+        this._completeCatch({ electrocuted: true });
+        return;
+      }
+      this._setPrompt(
+        `⚡ 高壓電擊命中大白鯊！剩餘血量 ${Math.round(this.sharkHP)}%`,
+        "繼續連按「⚡ 電擊反擊」（或 E 鍵）電死鯊魚領高額賞金！"
+      );
+    } else if (isEel) {
+      this.stamina = Math.max(0, this.stamina - 22);
+      this.fishStruggling = false;
+      this.tension = Math.max(10, this.tension - 15);
+      this._showToast("⚡ 電擊壓制了電鰻高壓放電！");
+    } else {
+      this.stamina = Math.max(0, this.stamina - 14);
+      this.fishStruggling = false;
+      this.tension = Math.max(8, this.tension - 10);
+      this._showToast("⚡ 電擊麻痺目標！趁現在收線！");
+    }
   }
 
   _spawnRipple(x, z, maxScale = 3.2) {
@@ -844,18 +1094,46 @@ export class FishingMasterGame {
     this.struggleCycleTimer = 1.8;
     this.wormVisual.visible = false;
 
-    this.audio.playSplash(1.0);
-    this._spawnSplashBurst(this.bobberRig.position.x, this.bobberRig.position.z, 24, 1.25);
-    this._setPrompt(
-      "🐟 魚兒上鉤！按住輪盤收線 · 張力過高時鬆手洩力！",
-      `水下傳來沉重拉力（難度：${species.difficulty}）`
-    );
+    this.playerHP = 100;
+    this.sharkHP = 100;
+    this.sharkAttackTimer = 2.2;
+    this.sharkLunging = false;
+    this.eelShockTimer = 2.2;
+    this.eelShockActive = false;
+    this.shockCooldown = 0;
+    this.lightningTimer = 0;
+
+    if (species.id === "great_white_shark") {
+      this.audio.playSharkAttack();
+      this._triggerScreenFX("flash-bite");
+      this._spawnSplashBurst(this.bobberRig.position.x, this.bobberRig.position.z, 32, 1.5);
+      this._setPrompt(
+        "🦈 狂暴大白鯊上鉤！牠會撲咬攻擊你！",
+        "快按右下「⚡ 電擊反擊」（或 E 鍵）電死鯊魚賺超高額金幣！"
+      );
+    } else if (species.id === "electric_eel") {
+      this.audio.playElectricZap(0.7);
+      this._spawnSplashBurst(this.bobberRig.position.x, this.bobberRig.position.z, 24, 1.2);
+      this._setPrompt(
+        "⚡ 巨型電鰻上鉤！留意藍電流放電！",
+        "放電時勿強行硬拉，可用「⚡ 電擊反擊」反制！"
+      );
+    } else {
+      this.audio.playSplash(1.0);
+      this._spawnSplashBurst(this.bobberRig.position.x, this.bobberRig.position.z, 24, 1.25);
+      this._setPrompt(
+        "🐟 魚兒上鉤！按住輪盤收線 · 張力過高時鬆手洩力！",
+        `水下傳來沉重拉力（難度：${species.difficulty}）`
+      );
+    }
   }
 
-  _completeCatch() {
+  _completeCatch({ electrocuted = false } = {}) {
     this.state = "SHOWCASE";
     this.ui.combatPanel.classList.remove("is-visible", "danger-pulse");
+    if (this.ui.bossCombatBars) this.ui.bossCombatBars.classList.remove("is-visible");
     if (this.ui.distPill) this.ui.distPill.classList.remove("is-visible");
+    this.lightningArcs.forEach((b) => { b.visible = false; });
     this.fishingLine.visible = false;
     this.bobberRig.visible = false;
     this.wormVisual.visible = true;
@@ -875,8 +1153,9 @@ export class FishingMasterGame {
       rankBonus = 1.3;
     }
 
-    const earnedGold = Math.round(species.baseGold * (0.75 + sizeNorm * 0.85) * rankBonus);
-    const earnedXp = Math.round(species.xp * rankBonus);
+    const killBonus = electrocuted && species.id === "great_white_shark" ? 1.55 : 1.0;
+    const earnedGold = Math.round(species.baseGold * (0.75 + sizeNorm * 0.85) * rankBonus * killBonus);
+    const earnedXp = Math.round(species.xp * rankBonus * killBonus);
     this.coins += earnedGold;
     this.xp += earnedXp;
 
@@ -888,6 +1167,7 @@ export class FishingMasterGame {
     };
     this._saveProgress();
     this._refreshTopHUD();
+    this._submitCatchToLeaderboard({ species, weightKg });
 
     while (this.trophyStageGroup.children.length > 0) {
       this.trophyStageGroup.remove(this.trophyStageGroup.children[0]);
@@ -895,8 +1175,17 @@ export class FishingMasterGame {
     this.trophyFishActor = this.assets.fishFactory[species.id]();
     this.trophyFishActor.group.rotation.y = Math.PI * 0.48;
     this.trophyFishActor.group.position.set(-0.18, 0.02, 0);
-    const fitScale = species.id === "northern_pike" ? 0.92 : species.id === "common_carp" ? 1.15 : 1.32;
-    this.trophyFishActor.setScaleMultiplier(fitScale);
+    const fitMap = {
+      great_white_shark: 0.44,
+      electric_eel: 0.72,
+      wels_catfish: 0.76,
+      northern_pike: 0.92,
+      golden_arowana: 1.15,
+      common_carp: 1.15,
+      rainbow_trout: 1.25,
+      largemouth_bass: 1.32,
+    };
+    this.trophyFishActor.setScaleMultiplier(fitMap[species.id] || 1.1);
     this.trophyStageGroup.add(this.trophyFishActor.group);
 
     this.trophyCoinMesh = this.assets.coinTemplate.clone();
@@ -904,8 +1193,11 @@ export class FishingMasterGame {
     this.trophyStageGroup.add(this.trophyCoinMesh);
 
     this.ui.catchSpecies.textContent = `${species.name} (${species.enName})`;
-    this.ui.catchBadge.textContent = `${species.difficulty} · ${rankLabel}`;
-    this.ui.catchBadge.style.color = species.diffColor;
+    this.ui.catchBadge.textContent =
+      electrocuted && species.id === "great_white_shark"
+        ? "⚡ 成功電死大白鯊！獲得 1.55x 巨額賞金！"
+        : `${species.difficulty} · ${rankLabel}`;
+    this.ui.catchBadge.style.color = electrocuted ? "#22d3ee" : species.diffColor;
     this.ui.catchWeight.textContent = `${weightKg.toFixed(2)} kg`;
     this.ui.catchGold.textContent = `+${earnedGold} 金幣`;
     this.ui.catchXp.textContent = `+${earnedXp} XP`;
@@ -923,7 +1215,11 @@ export class FishingMasterGame {
     this.ui.strikeRing.style.display = "none";
     this.ui.promptBanner.classList.remove("urgent");
     this.ui.combatPanel.classList.remove("is-visible", "danger-pulse");
+    if (this.ui.bossCombatBars) this.ui.bossCombatBars.classList.remove("is-visible");
     if (this.ui.distPill) this.ui.distPill.classList.remove("is-visible");
+    this.lightningArcs.forEach((b) => { b.visible = false; });
+    this.lightningTimer = 0;
+    this.eelShockActive = false;
     this.bobberRig.visible = false;
     this.wormVisual.visible = true;
     this.fishingLine.visible = false;
@@ -972,7 +1268,7 @@ export class FishingMasterGame {
       return `
         <div class="drawer-item">
           <div style="display:flex;align-items:center;gap:12px;">
-            <img class="species-thumb ${rec ? "" : "locked"}" src="./refs/${sp.id}_ref.png" alt="${sp.name}" />
+            <img class="species-thumb ${rec ? "" : "locked"}" src="${sp.thumb}" alt="${sp.name}" />
             <div>
               <div style="font-size:15.5px;font-weight:700;color:${sp.diffColor};">
                 ${sp.name} <span style="font-size:12px;color:#94a3b8;font-weight:600;">${sp.enName} · ${sp.difficulty}</span>
@@ -994,6 +1290,172 @@ export class FishingMasterGame {
     }).join("");
     this.ui.drawerBody.innerHTML = summaryHtml + itemsHtml;
     this.ui.drawerModal.style.display = "flex";
+  }
+
+  _apiEndpoint(path) {
+    return CLOUDFLARE_API_ORIGIN ? `${CLOUDFLARE_API_ORIGIN}${path}` : path;
+  }
+
+  async _submitCatchToLeaderboard({ species, weightKg } = {}) {
+    const totalCatches = Object.values(this.compendium).reduce((acc, r) => acc + (r.count || 0), 0);
+    const { level } = this._getLevelInfo();
+
+    // Update local fallback record immediately
+    const idx = this.localLeaderboard.findIndex((r) => r.player_id === this.playerId);
+    const prevRec = idx >= 0 ? this.localLeaderboard[idx] : { best_weight_kg: 0, weight_kg: 0 };
+    const prevBest = Math.max(prevRec.weight_kg || 0, prevRec.best_weight_kg || 0);
+    const useNewBest = weightKg && weightKg >= prevBest;
+    const nextRow = {
+      player_id: this.playerId,
+      player_name: this.playerName,
+      species_id: useNewBest ? species.id : (prevRec.species_id || species?.id || ""),
+      species_name: useNewBest ? species.name : (prevRec.species_name || species?.name || ""),
+      weight_kg: useNewBest ? weightKg : prevBest,
+      coins: this.coins,
+      level,
+      total_catches: totalCatches,
+    };
+    if (idx >= 0) this.localLeaderboard[idx] = nextRow;
+    else this.localLeaderboard.push(nextRow);
+    this._saveProgress();
+
+    try {
+      await fetch(this._apiEndpoint("/api/leaderboard"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          playerId: this.playerId,
+          playerName: this.playerName,
+          coins: this.coins,
+          level,
+          totalCatches,
+          catch: species && weightKg ? { speciesId: species.id, weightKg } : null,
+        }),
+      });
+    } catch {
+      // Offline or local-only fallback already persisted
+    }
+  }
+
+  async _openLeaderboardDrawer(tab = "trophy", speciesFilter = "all") {
+    this.ui.drawerTitle.textContent = "🏆 翡翠湖全球排行榜";
+    const filterButtons = tab === "trophy"
+      ? `<div class="lb-filters">
+          <button class="lb-filter-chip ${speciesFilter === "all" ? "active" : ""}" data-lb-sp="all">全部魚王</button>
+          ${SPECIES_DB.map((sp) => `<button class="lb-filter-chip ${speciesFilter === sp.id ? "active" : ""}" data-lb-sp="${sp.id}">${sp.name}</button>`).join("")}
+        </div>`
+      : "";
+
+    this.ui.drawerBody.innerHTML = `
+      <div class="lb-nick-bar">
+        <span style="font-size:12px;color:#94a3b8;white-space:nowrap;">釣手暱稱</span>
+        <input id="lb-nick-input" type="text" maxlength="18" value="${this.playerName.replace(/"/g, "&quot;")}" />
+        <button class="action-chip" id="lb-nick-save" type="button">儲存</button>
+      </div>
+      <div class="lb-tabs">
+        <button class="lb-tab ${tab === "trophy" ? "active" : ""}" data-lb-tab="trophy" type="button">🐟 最大魚王榜</button>
+        <button class="lb-tab ${tab === "wealth" ? "active" : ""}" data-lb-tab="wealth" type="button">🪙 總錢數排行</button>
+      </div>
+      ${filterButtons}
+      <div id="lb-rows" style="min-height:140px;font-size:13px;color:#94a3b8;">正在讀取排行榜...</div>
+    `;
+    this.ui.drawerModal.style.display = "flex";
+
+    this.ui.drawerBody.querySelectorAll("[data-lb-tab]").forEach((b) => {
+      b.onclick = () => this._openLeaderboardDrawer(b.getAttribute("data-lb-tab"), speciesFilter);
+    });
+    this.ui.drawerBody.querySelectorAll("[data-lb-sp]").forEach((b) => {
+      b.onclick = () => this._openLeaderboardDrawer("trophy", b.getAttribute("data-lb-sp"));
+    });
+    const saveBtn = document.getElementById("lb-nick-save");
+    const nickInput = document.getElementById("lb-nick-input");
+    if (saveBtn && nickInput) {
+      saveBtn.onclick = async () => {
+        const clean = nickInput.value.trim().slice(0, 18);
+        if (!clean) return;
+        this.playerName = clean;
+        this._saveProgress();
+        await this._submitCatchToLeaderboard({});
+        this._showToast(`已更新釣手暱稱：${this.playerName}`);
+        this._openLeaderboardDrawer(tab, speciesFilter);
+      };
+    }
+
+    let entries = null;
+    try {
+      const qs = new URLSearchParams({ type: tab, species: speciesFilter });
+      const res = await fetch(this._apiEndpoint(`/api/leaderboard?${qs.toString()}`));
+      if (res.ok) {
+        const data = await res.json();
+        if (data.ok && Array.isArray(data.entries)) entries = data.entries;
+      }
+    } catch {
+      entries = null;
+    }
+
+    if (!entries) {
+      let localRows = [...this.localLeaderboard];
+      const selfIdx = localRows.findIndex((r) => r.player_id === this.playerId);
+      if (selfIdx < 0) {
+        localRows.push({
+          player_id: this.playerId,
+          player_name: this.playerName,
+          coins: this.coins,
+          level: this._getLevelInfo().level,
+          total_catches: Object.values(this.compendium).reduce((a, r) => a + (r.count || 0), 0),
+          species_id: "",
+          species_name: "",
+          weight_kg: 0,
+        });
+      }
+      if (tab === "wealth") {
+        entries = localRows.sort((a, b) => (b.coins || 0) - (a.coins || 0));
+      } else {
+        entries = localRows
+          .filter((r) => (r.weight_kg || 0) > 0 && (speciesFilter === "all" || r.species_id === speciesFilter))
+          .sort((a, b) => (b.weight_kg || 0) - (a.weight_kg || 0));
+      }
+    }
+
+    const listEl = document.getElementById("lb-rows");
+    if (!listEl) return;
+    if (!entries.length) {
+      listEl.innerHTML = `<div style="padding:26px;text-align:center;color:#64748b;">尚無此魚種上榜紀錄，快去挑戰吧！</div>`;
+      return;
+    }
+
+    listEl.innerHTML = entries
+      .map((row, idx) => {
+        const medal = idx === 0 ? "🥇" : idx === 1 ? "🥈" : idx === 2 ? "🥉" : `#${idx + 1}`;
+        const isMe = row.player_id === this.playerId;
+        if (tab === "wealth") {
+          return `
+            <div class="lb-row ${isMe ? "is-me" : ""}">
+              <div style="display:flex;align-items:center;gap:10px;min-width:0;">
+                <div class="lb-rank tabular">${medal}</div>
+                <div style="min-width:0;">
+                  <div style="font-size:14px;font-weight:700;color:#f8fafc;">${row.player_name} ${isMe ? '<span style="color:#34d399;font-size:11px;">(你)</span>' : ""}</div>
+                  <div class="lb-meta tabular">LV.${row.level || 1} · 累計釣獲 ${row.total_catches || 0} 尾</div>
+                </div>
+              </div>
+              <div class="tabular" style="font-size:14.5px;font-weight:800;color:#fbbf24;white-space:nowrap;">🪙 ${Number(row.coins || 0).toLocaleString()}</div>
+            </div>
+          `;
+        }
+        return `
+          <div class="lb-row ${isMe ? "is-me" : ""}">
+            <div style="display:flex;align-items:center;gap:10px;min-width:0;">
+              <div class="lb-rank tabular">${medal}</div>
+              <div style="min-width:0;">
+                <div style="font-size:14px;font-weight:700;color:#f8fafc;">${row.player_name} ${isMe ? '<span style="color:#34d399;font-size:11px;">(你)</span>' : ""}</div>
+                <div class="lb-meta">${row.species_name || "未知魚種"}</div>
+              </div>
+            </div>
+            <div class="tabular" style="font-size:15px;font-weight:800;color:#38bdf8;white-space:nowrap;">${Number(row.weight_kg || 0).toFixed(2)} kg</div>
+          </div>
+        `;
+      })
+      .join("");
   }
 
   _openBaitDrawer() {
@@ -1080,6 +1542,14 @@ export class FishingMasterGame {
     }
     if (this.ui.btnCancelCast) {
       this.ui.btnCancelCast.style.display = showCancel ? "inline-flex" : "none";
+    }
+    if (this.ui.btnElectricShock) {
+      const fighting = this.state === "FIGHTING";
+      const isShark = fighting && this.activeCatch?.species?.id === "great_white_shark";
+      this.ui.btnElectricShock.classList.toggle("is-visible", fighting);
+      this.ui.btnElectricShock.classList.toggle("urgent-boss", isShark && this.shockCooldown <= 0);
+      this.ui.btnElectricShock.classList.toggle("on-cooldown", this.shockCooldown > 0);
+      this.ui.btnElectricShock.textContent = isShark ? "⚡ 電擊殺鯊" : "⚡ 電擊反擊";
     }
 
     btn.classList.remove("state-idle", "state-charging", "state-waiting", "state-bite", "state-fighting");
@@ -1309,6 +1779,61 @@ export class FishingMasterGame {
       }
     } else if (this.state === "FIGHTING") {
       const sp = this.activeCatch.species;
+      const isShark = sp.id === "great_white_shark";
+      const isEel = sp.id === "electric_eel";
+      this.shockCooldown = Math.max(0, this.shockCooldown - dt);
+
+      if (this.ui.bossCombatBars) {
+        this.ui.bossCombatBars.classList.toggle("is-visible", isShark);
+      }
+      if (isShark) {
+        if (this.ui.sharkHpFill) this.ui.sharkHpFill.style.width = `${Math.round(this.sharkHP)}%`;
+        if (this.ui.sharkHpVal) this.ui.sharkHpVal.textContent = `${Math.round(this.sharkHP)}%`;
+        if (this.ui.playerHpFill) this.ui.playerHpFill.style.width = `${Math.round(this.playerHP)}%`;
+        if (this.ui.playerHpVal) {
+          this.ui.playerHpVal.textContent = `${Math.round(this.playerHP)}%`;
+          this.ui.playerHpVal.style.color = this.playerHP <= 40 ? "#f87171" : "#34d399";
+        }
+        this.sharkAttackTimer -= dt;
+        if (this.sharkAttackTimer <= 0.65 && !this.sharkLunging) {
+          this.sharkLunging = true;
+          this._setPrompt("🦈 大白鯊張嘴撲咬過來了！快按「⚡ 電擊殺鯊」打斷！", "按右邊電擊按鈕或 E 鍵電死大白鯊！");
+        }
+        if (this.sharkAttackTimer <= 0) {
+          this.sharkAttackTimer = 2.6;
+          this.sharkLunging = false;
+          this.playerHP = Math.max(0, this.playerHP - 24);
+          this.audio.playSharkAttack();
+          this._triggerScreenFX("flash-bite");
+          this._vibrate([120, 40, 120]);
+          this._spawnSplashBurst(this.bobberRig.position.x, this.bobberRig.position.z, 26, 1.45);
+          this._showToast(`🦈 大白鯊咬傷了你！（剩餘生命 ${Math.round(this.playerHP)}%）`);
+          if (this.playerHP <= 0) {
+            this._releaseApproachingFish();
+            this._resetToIdle("💥 你被狂暴大白鯊撞翻了！下次快連按「⚡ 電擊殺鯊」把牠電死！", "");
+            return;
+          }
+        }
+      }
+
+      if (isEel) {
+        this.eelShockTimer -= dt;
+        if (this.eelShockTimer <= 0) {
+          this.eelShockActive = !this.eelShockActive;
+          this.eelShockTimer = this.eelShockActive ? 1.25 : 2.3;
+          if (this.eelShockActive) {
+            this.audio.playElectricZap(0.5);
+            this._spawnRipple(this.bobberRig.position.x, this.bobberRig.position.z, 3.8);
+          }
+        }
+        if (this.eelShockActive) {
+          const pFish = this.hookedFishActor ? this.hookedFishActor.group.position : this.bobberRig.position;
+          this._updateLightningBolts(
+            new THREE.Vector3(pFish.x + (Math.random() - 0.5) * 1.4, 0.28, pFish.z + (Math.random() - 0.5) * 1.4),
+            pFish
+          );
+        }
+      }
 
       this.struggleCycleTimer -= dt;
       if (this.struggleCycleTimer <= 0) {
@@ -1324,13 +1849,17 @@ export class FishingMasterGame {
       }
 
       if (this.isPressingAction) {
-        const tensionRise = (this.fishStruggling ? 52.0 : 24.0) * sp.fightStrength;
+        const eelBonusTension = isEel && this.eelShockActive ? 26.0 : 0;
+        const tensionRise = (this.fishStruggling ? 52.0 : 24.0) * sp.fightStrength + eelBonusTension;
         this.tension += tensionRise * dt;
         const pullSpeed = sp.reelSpeed * (this.fishStruggling ? 0.52 : 1.18);
-        this.fishDist = Math.max(0.8, this.fishDist - pullSpeed * dt);
+        this.fishDist = Math.max(isShark ? 3.0 : 0.8, this.fishDist - pullSpeed * dt);
         this.stamina = Math.max(0, this.stamina - sp.staminaDrainRate * dt);
         this.audio.tickReel(this.tension / 100);
         if (this.rodCtrl) this.rodCtrl.spinReel(dt, 14.0);
+        if (isEel && this.eelShockActive && Math.random() < dt * 3.5) {
+          this._triggerScreenFX("flash-shock");
+        }
       } else {
         this.tension = Math.max(8, this.tension - 28.0 * dt);
         if (this.fishStruggling && this.stamina > 15) {
@@ -1346,9 +1875,24 @@ export class FishingMasterGame {
 
       if (this.hookedFishActor) {
         const fg = this.hookedFishActor.group;
-        fg.position.set(fx, this.fishStruggling ? -0.08 + 0.08 * Math.sin(t * 12) : -0.24, fz);
-        fg.rotation.y = swayAngle + (this.fishStruggling ? Math.PI + 0.6 * Math.sin(t * 7) : 0.4 * Math.sin(t * 3));
-        this.hookedFishActor.updateSwim(t, this.fishStruggling ? 15.0 : 7.0, 0.34);
+        const jumpY = isShark && this.sharkLunging ? 0.32 + 0.16 * Math.sin(t * 18) : this.fishStruggling ? -0.08 + 0.08 * Math.sin(t * 12) : -0.24;
+        fg.position.set(fx, jumpY, fz);
+        fg.rotation.y = isShark && this.sharkLunging
+          ? swayAngle + Math.PI
+          : swayAngle + (this.fishStruggling ? Math.PI + 0.6 * Math.sin(t * 7) : 0.4 * Math.sin(t * 3));
+        this.hookedFishActor.updateSwim(t, this.fishStruggling || isShark ? 15.0 : 7.0, 0.34);
+      }
+
+      if (this.lightningTimer > 0) {
+        this.lightningTimer -= dt;
+        if (this.rodCtrl) {
+          const tip = new THREE.Vector3();
+          this.rodCtrl.getTipWorldPosition(tip);
+          const target = this.hookedFishActor ? this.hookedFishActor.group.position : this.bobberRig.position;
+          this._updateLightningBolts(tip, target);
+        }
+      } else if (!(isEel && this.eelShockActive)) {
+        this.lightningArcs.forEach((b) => { b.visible = false; });
       }
 
       const tNorm = Math.min(1, this.tension / 100);
@@ -1356,8 +1900,8 @@ export class FishingMasterGame {
       targetBendY = 0.14 + tNorm * 0.42 + (this.fishStruggling ? 0.04 * Math.sin(t * 24) : 0);
       targetBendZ = 0.11 * Math.sin(t * 3.2);
 
-      if (this.fishStruggling || this.tension > 72) {
-        const shake = (0.012 + tNorm * 0.026) * (this.fishStruggling ? 1.25 : 0.6);
+      if (this.fishStruggling || this.tension > 72 || (isShark && this.sharkLunging)) {
+        const shake = (0.012 + tNorm * 0.026) * (this.sharkLunging ? 1.85 : this.fishStruggling ? 1.25 : 0.6);
         this.camera.position.x += (Math.random() - 0.5) * shake;
         this.camera.position.y += (Math.random() - 0.5) * shake;
       }
@@ -1370,8 +1914,10 @@ export class FishingMasterGame {
         this._showToast("💥 張力超過 100%，魚線斷裂！");
         this._releaseApproachingFish();
         this._resetToIdle("💥 張力過高 · 魚線斷裂！按住右下輪盤重新拋竿", "當魚兒掙扎衝刺、張力變紅時，短暫鬆手即可安全降壓");
-      } else if (this.fishDist <= 1.55 || (this.stamina <= 0 && this.fishDist <= 4.0)) {
+      } else if (!isShark && (this.fishDist <= 1.55 || (this.stamina <= 0 && this.fishDist <= 4.0))) {
         this._completeCatch();
+      } else if (isShark && (this.sharkHP <= 0 || this.fishDist <= 3.1 && this.stamina <= 0)) {
+        this._completeCatch({ electrocuted: this.sharkHP <= 0 });
       }
     }
 

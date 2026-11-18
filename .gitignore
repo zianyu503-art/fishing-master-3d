@@ -20,9 +20,11 @@ outputs/hf_assets/fishing-boat-6e33005f.glb
 outputs/hf_assets/fps-arms-08ec4403.glb
 outputs/hf_assets/fps-arms-with-advanced-rig-81706ab4.glb
 outputs/hf_assets/rigged-arms-76f4c7ae.glb
+outputs/hf_assets/world_fish/
 
-# Keep only the 3 runtime compendium thumbnails in refs/
+# Keep runtime compendium thumbnails in refs/
 refs/*
 !refs/largemouth_bass_ref.png
 !refs/common_carp_ref.png
 !refs/northern_pike_ref.png
+!refs/*_ref.webp
