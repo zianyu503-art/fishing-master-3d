@@ -876,11 +876,15 @@ function buildRemoteAnglerActor(charScene, rodScene, bobberScene, opts = {}) {
     });
   }
 
-  // Attach TailorRig fishing rod in character-local right-hand grip coordinates (facing -Z)
-  const rodCtrl = buildTailorRigRodController(rodScene, 1.32);
+  // Attach TailorRig fishing rod in front of torso/chest (`facing -Z`)
+  const rodCtrl = buildTailorRigRodController(rodScene, 1.28);
+  const leftHandleAnchor = new THREE.Object3D();
+  leftHandleAnchor.position.set(0.0, -0.01, 0.11);
+  rodCtrl.group.add(leftHandleAnchor);
+
   const rodPivot = new THREE.Group();
-  rodPivot.position.set(0.17, 1.04, -0.30);
-  rodPivot.rotation.set(0.32, -0.18, 0.06);
+  rodPivot.position.set(0.14, 1.12, -0.38);
+  rodPivot.rotation.set(0.26, -0.22, 0.04);
   rodPivot.add(rodCtrl.group);
   group.add(rodPivot);
 
@@ -1090,17 +1094,19 @@ function buildRemoteAnglerActor(charScene, rodScene, bobberScene, opts = {}) {
         solveTwoBoneIKPlusY(b.rUpLeg, b.rLeg, b.rFoot, _vRFootTgt, _vRKneePole, 0);
       }
 
-      // Two-Bone IK for both arms gripping the TailorRig fishing rod!
+      // Two-Bone IK for both arms gripping the TailorRig fishing rod cleanly in front of chest!
       rodCtrl.getRightGripWorldPosition(_vRGrip);
-      rodCtrl.getLeftButtWorldPosition(_vLButt);
+      leftHandleAnchor.getWorldPosition(_vLButt);
       rodCtrl.getTipWorldPosition(_vTip);
-      _vRPole.set(0.38, 0.85, 0.10).applyMatrix4(group.matrixWorld);
-      _vLPole.set(-0.34, 0.85, 0.12).applyMatrix4(group.matrixWorld);
+      _vRPole.set(0.46, 1.02, -0.08).applyMatrix4(group.matrixWorld);
+      _vLPole.set(-0.42, 1.02, -0.14).applyMatrix4(group.matrixWorld);
       if (b.rArm && b.rForeArm && b.rHand) {
         solveTwoBoneIKPlusY(b.rArm, b.rForeArm, b.rHand, _vRGrip, _vRPole, 0);
+        aimBonePlusYAtWorldPoint(b.rHand, _vTip, -0.35);
       }
       if (b.lArm && b.lForeArm && b.lHand) {
         solveTwoBoneIKPlusY(b.lArm, b.lForeArm, b.lHand, _vLButt, _vLPole, 0);
+        aimBonePlusYAtWorldPoint(b.lHand, _vRGrip, 0.45);
       }
 
       // Update world-space bobber & parabolic fishing line
