@@ -263,4 +263,107 @@ export class FishingAudio {
     sub.start(now);
     sub.stop(now + 0.37);
   }
+
+  playSharkJumpScare() {
+    if (!this.enabled || !this.ctx) return;
+    this.playSplash(1.4);
+    const now = this.ctx.currentTime;
+
+    // 1. Sudden massive sub-bass boom
+    const sub = this.ctx.createOscillator();
+    sub.type = "sine";
+    sub.frequency.setValueAtTime(92, now);
+    sub.frequency.exponentialRampToValueAtTime(32, now + 0.65);
+    const sg = this.ctx.createGain();
+    sg.gain.setValueAtTime(0.65, now);
+    sg.gain.exponentialRampToValueAtTime(0.001, now + 0.7);
+    sub.connect(sg);
+    sg.connect(this.ctx.destination);
+    sub.start(now);
+    sub.stop(now + 0.72);
+
+    // 2. Piercing dissonant horror screech cluster (587 / 622 / 1244 Hz)
+    [587.33, 622.25, 1244.5].forEach((freq, idx) => {
+      const osc = this.ctx.createOscillator();
+      osc.type = "sawtooth";
+      osc.frequency.setValueAtTime(freq, now);
+      osc.frequency.linearRampToValueAtTime(freq * (idx === 2 ? 0.92 : 1.04), now + 0.9);
+      const bp = this.ctx.createBiquadFilter();
+      bp.type = "bandpass";
+      bp.frequency.value = freq * 1.4;
+      bp.Q.value = 1.6;
+      const g = this.ctx.createGain();
+      g.gain.setValueAtTime(0.001, now);
+      g.gain.linearRampToValueAtTime(0.22, now + 0.025);
+      g.gain.exponentialRampToValueAtTime(0.001, now + 0.95);
+      osc.connect(bp);
+      bp.connect(g);
+      g.connect(this.ctx.destination);
+      osc.start(now);
+      osc.stop(now + 0.98);
+    });
+
+    // 3. Guttural monster roar + panic heartbeats
+    const roarSrc = this.ctx.createBufferSource();
+    roarSrc.buffer = this._noiseBuffer(1.2);
+    const roarFilter = this.ctx.createBiquadFilter();
+    roarFilter.type = "lowpass";
+    roarFilter.frequency.setValueAtTime(950, now);
+    roarFilter.frequency.exponentialRampToValueAtTime(160, now + 1.1);
+    const rg = this.ctx.createGain();
+    rg.gain.setValueAtTime(0.45, now);
+    rg.gain.exponentialRampToValueAtTime(0.001, now + 1.15);
+    roarSrc.connect(roarFilter);
+    roarFilter.connect(rg);
+    rg.connect(this.ctx.destination);
+    roarSrc.start(now);
+    roarSrc.stop(now + 1.18);
+
+    [0.0, 0.28, 0.54, 0.78, 1.0].forEach((offset) => {
+      const hb = this.ctx.createOscillator();
+      hb.type = "sine";
+      hb.frequency.setValueAtTime(64, now + offset);
+      hb.frequency.exponentialRampToValueAtTime(28, now + offset + 0.14);
+      const hbg = this.ctx.createGain();
+      hbg.gain.setValueAtTime(0.35, now + offset);
+      hbg.gain.exponentialRampToValueAtTime(0.001, now + offset + 0.16);
+      hb.connect(hbg);
+      hbg.connect(this.ctx.destination);
+      hb.start(now + offset);
+      hb.stop(now + offset + 0.18);
+    });
+  }
+
+  playSharkChomp() {
+    if (!this.enabled || !this.ctx) return;
+    const now = this.ctx.currentTime;
+
+    const crunch = this.ctx.createBufferSource();
+    crunch.buffer = this._noiseBuffer(0.38);
+    const hp = this.ctx.createBiquadFilter();
+    hp.type = "bandpass";
+    hp.frequency.setValueAtTime(1400, now);
+    hp.frequency.exponentialRampToValueAtTime(220, now + 0.32);
+    hp.Q.value = 1.2;
+    const cg = this.ctx.createGain();
+    cg.gain.setValueAtTime(0.55, now);
+    cg.gain.exponentialRampToValueAtTime(0.001, now + 0.35);
+    crunch.connect(hp);
+    hp.connect(cg);
+    cg.connect(this.ctx.destination);
+    crunch.start(now);
+    crunch.stop(now + 0.36);
+
+    const thud = this.ctx.createOscillator();
+    thud.type = "sawtooth";
+    thud.frequency.setValueAtTime(120, now);
+    thud.frequency.exponentialRampToValueAtTime(28, now + 0.3);
+    const tg = this.ctx.createGain();
+    tg.gain.setValueAtTime(0.45, now);
+    tg.gain.exponentialRampToValueAtTime(0.001, now + 0.32);
+    thud.connect(tg);
+    tg.connect(this.ctx.destination);
+    thud.start(now);
+    thud.stop(now + 0.34);
+  }
 }

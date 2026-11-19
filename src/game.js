@@ -293,6 +293,7 @@ export class FishingMasterGame {
       btnBait: $("btn-bait-shop"),
       btnEnvSwitch: $("btn-env-switch"),
       fxOverlay: $("fx-overlay"),
+      jawsOverlay: $("shark-jaws-overlay"),
       bossCombatBars: $("boss-combat-bars"),
       sharkHpFill: $("bar-shark-hp"),
       sharkHpVal: $("val-shark-hp"),
@@ -393,6 +394,10 @@ export class FishingMasterGame {
     this.sunLight.shadow.camera.top = d;
     this.sunLight.shadow.camera.bottom = -d;
     this.scene.add(this.sunLight);
+
+    // Blood-red Jump-Scare PointLight (active only during SHARK_AMBUSH)
+    this.horrorLight = new THREE.PointLight(0xff1515, 0, 12);
+    this.scene.add(this.horrorLight);
 
     // First-Person Angler Rig attached to Camera
     this.fpRig = new THREE.Group();
@@ -988,6 +993,22 @@ export class FishingMasterGame {
     }
   }
 
+  _clearHorrorEffects() {
+    if (this.renderer) this.renderer.toneMappingExposure = 1.05;
+    if (this.camera) {
+      if (this.camera.fov !== 62) {
+        this.camera.fov = 62;
+        this.camera.updateProjectionMatrix();
+      }
+      this.camera.rotation.z = 0;
+    }
+    if (this.horrorLight) this.horrorLight.intensity = 0;
+    if (this.ui.jawsOverlay) {
+      this.ui.jawsOverlay.classList.remove("active", "chomp-shut");
+      this.ui.jawsOverlay.style.setProperty("--jaw-progress", "0");
+    }
+  }
+
   _triggerElectricShock() {
     if (this.state === "SHARK_AMBUSH" && this.activeCatch) {
       this.lightningTimer = 0.45;
@@ -1000,6 +1021,7 @@ export class FishingMasterGame {
         const target = this.hookedFishActor ? this.hookedFishActor.group.position : this.bobberRig.position;
         this._updateLightningBolts(tip, target);
       }
+      this._clearHorrorEffects();
       this.ui.strikeRing.style.display = "none";
       this.ui.strikeRing.classList.remove("shock-qte");
       this.ui.strikeRing.textContent = "💦 揚竿！";
@@ -1011,12 +1033,11 @@ export class FishingMasterGame {
 
     if (this.state !== "FIGHTING" || !this.activeCatch || this.shockCooldown > 0) return;
     const sp = this.activeCatch.species;
-    const isShark = sp.id === "great_white_shark";
     const isEel = sp.id === "electric_eel";
-    this.shockCooldown = isShark ? 1.2 : 2.2;
+    this.shockCooldown = 2.2;
     this.lightningTimer = 0.30;
 
-    this.audio.playElectricZap(isShark ? 1.15 : 0.95);
+    this.audio.playElectricZap(0.95);
     this._triggerScreenFX("flash-shock");
     this._vibrate([25, 18, 35]);
 
@@ -1029,12 +1050,7 @@ export class FishingMasterGame {
     this._spawnSplashBurst(this.bobberRig.position.x, this.bobberRig.position.z, 18, 1.1);
     this._spawnRipple(this.bobberRig.position.x, this.bobberRig.position.z, 3.6);
 
-    if (isShark) {
-      this.stamina = Math.max(0, this.stamina - 18);
-      this.fishStruggling = false;
-      this.tension = Math.max(12, this.tension - 16);
-      this._showToast("⚡ 先把大白鯊拉上岸，牠撲過來的瞬間再電死牠！");
-    } else if (isEel) {
+    if (isEel) {
       this.stamina = Math.max(0, this.stamina - 22);
       this.fishStruggling = false;
       this.tension = Math.max(10, this.tension - 15);
@@ -1049,29 +1065,44 @@ export class FishingMasterGame {
 
   _startSharkAmbush() {
     this.state = "SHARK_AMBUSH";
-    this.ambushDuration = 1.95;
+    this.ambushDuration = 1.65;
     this.ambushTimer = this.ambushDuration;
-    this.ambushStartPos = this.hookedFishActor
+    this.targetPitch = -0.04;
+
+    const forward = new THREE.Vector3(-Math.sin(this.yaw), 0, -Math.cos(this.yaw));
+    const curPos = this.hookedFishActor
       ? this.hookedFishActor.group.position.clone()
-      : new THREE.Vector3(this.playerPos.x, -0.1, this.playerPos.z - 3.0);
+      : this.playerPos.clone().addScaledVector(forward, 3.0);
+    // Guarantee at least 2.8m launch distance so the jaws-first lunge explodes out of the water
+    const minLaunch = this.playerPos.clone().addScaledVector(forward, 2.95);
+    minLaunch.y = -0.25;
+    this.ambushStartPos = curPos.distanceTo(this.playerPos) < 2.6 ? minLaunch : curPos;
+    this.ambushStartPos.y = -0.25;
 
     this.ui.combatPanel.classList.remove("is-visible", "danger-pulse");
     if (this.ui.bossCombatBars) this.ui.bossCombatBars.classList.remove("is-visible");
     if (this.ui.distPill) this.ui.distPill.classList.remove("is-visible");
+
+    this.renderer.toneMappingExposure = 0.48;
+    if (this.ui.jawsOverlay) {
+      this.ui.jawsOverlay.classList.remove("chomp-shut");
+      this.ui.jawsOverlay.style.setProperty("--jaw-progress", "0.08");
+      this.ui.jawsOverlay.classList.add("active");
+    }
 
     this.ui.strikeRing.classList.add("shock-qte");
     this.ui.strikeRing.textContent = "⚡ 瞬間電擊！";
     this.ui.strikeRing.style.display = "flex";
     this.ui.promptBanner.classList.add("urgent");
     this._setPrompt(
-      "🦈 大白鯊衝上岸撲向你！瞬間按「⚡ 電擊」！",
-      "點擊電擊鈕 / 中央藍圈 / 按 E 鍵把牠電死！"
+      "🦈 大白鯊衝出水面直撲你臉而來！！",
+      "立刻點擊「⚡ 瞬間電擊！」／右下電擊鈕／按 E 鍵！"
     );
 
-    this.audio.playSharkAttack();
+    this.audio.playSharkJumpScare();
     this._triggerScreenFX("flash-bite");
-    this._vibrate([85, 35, 95]);
-    this._spawnSplashBurst(this.ambushStartPos.x, this.ambushStartPos.z, 34, 1.5);
+    this._vibrate([120, 30, 140, 30, 180]);
+    this._spawnSplashBurst(this.ambushStartPos.x, this.ambushStartPos.z, 44, 1.85);
   }
 
   _spawnRipple(x, z, maxScale = 3.2) {
@@ -1148,12 +1179,13 @@ export class FishingMasterGame {
     this.lightningTimer = 0;
 
     if (species.id === "great_white_shark") {
-      this.audio.playSharkAttack();
-      this._triggerScreenFX("flash-bite");
-      this._spawnSplashBurst(this.bobberRig.position.x, this.bobberRig.position.z, 32, 1.5);
+      // Unannounced ambush: keep initial bite & reel tension mysterious until shore!
+      this.hookedFishActor.group.position.y = -0.88;
+      this.audio.playSplash(1.1);
+      this._spawnSplashBurst(this.bobberRig.position.x, this.bobberRig.position.z, 26, 1.3);
       this._setPrompt(
-        "🦈 狂暴大白鯊上鉤！拉上岸瞬間小心牠撲向你！",
-        "將牠拉回岸邊時準備瞬間按「⚡ 電擊」！"
+        "🐟 魚兒上鉤！按住輪盤收線 · 張力過高時鬆手洩力！",
+        "水下傳來沉重詭異的拉力……千萬保持警戒！"
       );
     } else if (species.id === "electric_eel") {
       this.audio.playElectricZap(0.7);
@@ -1174,6 +1206,7 @@ export class FishingMasterGame {
 
   _completeCatch({ electrocuted = false } = {}) {
     this.state = "SHOWCASE";
+    this._clearHorrorEffects();
     this.ui.combatPanel.classList.remove("is-visible", "danger-pulse");
     if (this.ui.bossCombatBars) this.ui.bossCombatBars.classList.remove("is-visible");
     if (this.ui.distPill) this.ui.distPill.classList.remove("is-visible");
@@ -1256,6 +1289,7 @@ export class FishingMasterGame {
 
   _resetToIdle(mainMsg = "長按右下輪盤拋竿", subMsg = "") {
     this.state = "IDLE";
+    this._clearHorrorEffects();
     this.ui.strikeRing.style.display = "none";
     this.ui.strikeRing.classList.remove("shock-qte");
     this.ui.strikeRing.textContent = "💦 揚竿！";
@@ -1892,7 +1926,7 @@ export class FishingMasterGame {
 
       if (this.hookedFishActor) {
         const fg = this.hookedFishActor.group;
-        const jumpY = this.fishStruggling ? -0.08 + 0.08 * Math.sin(t * 12) : -0.24;
+        const jumpY = isShark ? -0.88 : this.fishStruggling ? -0.08 + 0.08 * Math.sin(t * 12) : -0.24;
         fg.position.set(fx, jumpY, fz);
         fg.rotation.y = swayAngle + (this.fishStruggling ? Math.PI + 0.6 * Math.sin(t * 7) : 0.4 * Math.sin(t * 3));
         this.hookedFishActor.updateSwim(t, this.fishStruggling || isShark ? 15.0 : 7.0, 0.34);
@@ -1937,34 +1971,62 @@ export class FishingMasterGame {
     } else if (this.state === "SHARK_AMBUSH") {
       this.ambushTimer -= dt;
       const u = THREE.MathUtils.clamp(1 - this.ambushTimer / this.ambushDuration, 0, 1);
+      const accel = Math.pow(u, 1.5);
       const forward = new THREE.Vector3(-Math.sin(this.yaw), 0, -Math.cos(this.yaw));
-      const endPos = this.playerPos.clone().addScaledVector(forward, 0.72);
-      endPos.y = this.playerPos.y - 0.36;
+      const endPos = this.playerPos.clone().addScaledVector(forward, 0.22);
+      endPos.y = this.playerPos.y - 0.08;
 
       if (this.hookedFishActor) {
         const fg = this.hookedFishActor.group;
-        fg.position.lerpVectors(this.ambushStartPos, endPos, Math.pow(u, 0.85));
-        fg.position.y += Math.sin(u * Math.PI) * 0.85;
-        fg.rotation.y = this.yaw + Math.PI;
-        fg.rotation.x = 0.25 * Math.cos(u * Math.PI);
-        this.hookedFishActor.updateSwim(t, 20.0, 0.42);
+        this.hookedFishActor.setScaleMultiplier(1.65 + u * 0.65);
+        fg.position.lerpVectors(this.ambushStartPos, endPos, accel);
+        fg.position.y += Math.sin(u * Math.PI) * 0.55;
+        // Snout/jaws sit on +Z in TailorRig fish GLBs, so R_y(yaw) faces dead-center toward camera!
+        fg.rotation.y = this.yaw;
+        fg.rotation.x = -0.18 * (1 - accel);
+        this.hookedFishActor.updateSwim(t, 28.0, 0.48);
+        if (this.hookedFishActor.bones.head) {
+          this.hookedFishActor.bones.head.rotation.x = -0.34;
+          this.hookedFishActor.bones.head.rotation.z = Math.sin(t * 46) * 0.26;
+        }
         this.bobberRig.position.copy(fg.position);
+
+        if (this.horrorLight) {
+          this.horrorLight.position.copy(fg.position).addScaledVector(forward, -0.35);
+          this.horrorLight.position.y += 0.25;
+          this.horrorLight.intensity = 9.0;
+        }
       }
 
-      targetPivotPitch = 0.62;
-      this.camera.position.x += (Math.random() - 0.5) * 0.032;
-      this.camera.position.y += (Math.random() - 0.5) * 0.032;
+      if (this.ui.jawsOverlay) {
+        this.ui.jawsOverlay.style.setProperty("--jaw-progress", Math.min(1, u * 1.05).toFixed(3));
+      }
+
+      targetPivotPitch = 0.85;
+      this.camera.fov = 76 + u * 14;
+      this.camera.updateProjectionMatrix();
+      this.camera.rotation.x = -0.04 + Math.sin(t * 36) * 0.03;
+      this.camera.rotation.z = Math.sin(t * 42) * (0.06 + u * 0.13);
+      const shake = 0.055 + u * 0.095;
+      this.camera.position.x += (Math.random() - 0.5) * shake;
+      this.camera.position.y += (Math.random() - 0.5) * shake;
 
       if (this.ambushTimer <= 0) {
         this.coins = Math.max(0, this.coins - 120);
         this._saveProgress();
         this._refreshTopHUD();
-        this.audio.playSharkAttack();
+        this.audio.playSharkChomp();
         this._triggerScreenFX("flash-bite");
-        this._vibrate([140, 50, 140]);
-        this._showToast("💥 被上岸撲咬的大白鯊撞傷！損失 120 金幣！");
+        this._vibrate([160, 40, 200]);
+        if (this.ui.jawsOverlay) {
+          this.ui.jawsOverlay.classList.add("chomp-shut");
+        }
+        this._showToast("💥 被衝上岸的大白鯊狠咬一口！損失 120 金幣！");
         this._releaseApproachingFish();
-        this._resetToIdle("🦈 慢了一步！大白鯊上岸撲咬後掙脫逃走了，下次瞬間按「⚡ 電擊」！", "");
+        setTimeout(() => {
+          this._resetToIdle("🦈 被撲咬逃脫！下次見牠衝出水面時瞬間按「⚡ 電擊」！", "");
+        }, 380);
+        this.state = "LOADING";
       }
     }
 
