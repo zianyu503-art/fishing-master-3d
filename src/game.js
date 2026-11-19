@@ -242,11 +242,34 @@ export class FishingMasterGame {
     this.actionPointerId = null;
     this.reelSpinDeg = 0;
 
-    this.playerPos = new THREE.Vector3(0, 2.30, 30.4);
+    let idHash = 0;
+    for (let i = 0; i < this.playerId.length; i++) {
+      idHash = (idHash * 31 + this.playerId.charCodeAt(i)) | 0;
+    }
+    const spawnOffsetX = ((Math.abs(idHash) % 21) - 10) * 0.105;
+    this.playerPos = new THREE.Vector3(spawnOffsetX, 2.30, 30.4);
     this.yaw = 0;
     this.pitch = -0.13;
     this.targetYaw = 0;
     this.targetPitch = -0.13;
+
+    // Multiplayer server state (Always-On Cloudflare Durable Objects WebSocket + D1 HTTP fallback)
+    const rawRoom = typeof window !== "undefined" ? new URLSearchParams(window.location.search).get("room") : "";
+    this.mpRoomId = String(rawRoom || "lobby").toLowerCase().replace(/[^a-z0-9_-]/g, "").slice(0, 32) || "lobby";
+    this.mpEnabled = true;
+    this.mpWs = null;
+    this.mpTransport = "connecting";
+    this.mpOnlineCount = 1;
+    this.mpPingMs = null;
+    this.mpWsFailures = 0;
+    this.mpLastStateSentAt = 0;
+    this.mpLastSentSig = "";
+    this.mpLastSyncEventTs = Date.now() - 8000;
+    this.mpConnectTimeout = null;
+    this.mpReconnectTimer = null;
+    this.mpFallbackTimer = null;
+    this.mpPingTimer = null;
+    this.remotePlayers = new Map();
 
     // 3D collections
     this.lakeFishPool = [];
@@ -290,6 +313,9 @@ export class FishingMasterGame {
       btnAudio: $("btn-audio"),
       btnBook: $("btn-compendium"),
       btnLeaderboard: $("btn-leaderboard"),
+      btnMultiplayer: $("btn-multiplayer"),
+      mpDot: $("mp-status-dot"),
+      uiMpLabel: $("ui-mp-label"),
       btnBait: $("btn-bait-shop"),
       btnEnvSwitch: $("btn-env-switch"),
       fxOverlay: $("fx-overlay"),
@@ -533,6 +559,7 @@ export class FishingMasterGame {
       this.state = "IDLE";
       this._setPrompt("長按右下輪盤拋竿", "");
       this.ui.promptBanner.classList.add("idle-soft");
+      this._initMultiplayer();
 
       this.clock = new THREE.Clock();
       this._animate = this._animate.bind(this);
@@ -869,6 +896,9 @@ export class FishingMasterGame {
     if (this.ui.btnLeaderboard) {
       this.ui.btnLeaderboard.onclick = () => this._openLeaderboardDrawer("trophy", "all");
     }
+    if (this.ui.btnMultiplayer) {
+      this.ui.btnMultiplayer.onclick = () => this._openMultiplayerDrawer();
+    }
     this.ui.btnBait.onclick = () => this._openBaitDrawer();
     if (this.ui.btnElectricShock) {
       this.ui.btnElectricShock.addEventListener("pointerdown", (e) => {
@@ -1074,12 +1104,15 @@ export class FishingMasterGame {
     const forward = new THREE.Vector3(-Math.sin(this.yaw), 0, -Math.cos(this.yaw));
     const curPos = this.hookedFishActor
       ? this.hookedFishActor.group.position.clone()
-      : this.playerPos.clone().addScaledVector(forward, 3.0);
-    // Guarantee at least 2.8m launch distance so the jaws-first lunge explodes out of the water
-    const minLaunch = this.playerPos.clone().addScaledVector(forward, 2.95);
-    minLaunch.y = -0.25;
-    this.ambushStartPos = curPos.distanceTo(this.playerPos) < 2.6 ? minLaunch : curPos;
-    this.ambushStartPos.y = -0.25;
+      : this.playerPos.clone().addScaledVector(forward, 4.85);
+    // Guarantee at least 4.5m launch distance so the full jaws-first lunge frames cleanly in front of lens
+    const minLaunch = this.playerPos.clone().addScaledVector(forward, 4.85);
+    minLaunch.y = -0.35;
+    this.ambushStartPos = curPos.distanceTo(this.playerPos) < 4.5 ? minLaunch : curPos;
+    this.ambushStartPos.y = -0.35;
+    if (this.hookedFishActor?.setJawOpen) {
+      this.hookedFishActor.setJawOpen(0.35);
+    }
 
     this.ui.combatPanel.classList.remove("is-visible", "danger-pulse");
     if (this.ui.bossCombatBars) this.ui.bossCombatBars.classList.remove("is-visible");
@@ -1247,6 +1280,7 @@ export class FishingMasterGame {
     this._saveProgress();
     this._refreshTopHUD();
     this._submitCatchToLeaderboard({ species, weightKg });
+    this._broadcastCatch(species, weightKg, electrocuted);
 
     while (this.trophyStageGroup.children.length > 0) {
       this.trophyStageGroup.remove(this.trophyStageGroup.children[0]);
@@ -1374,6 +1408,7 @@ export class FishingMasterGame {
     this.ui.drawerModal.style.display = "flex";
   }
 
+
   _escapeHtml(str) {
     return String(str ?? "")
       .replace(/&/g, "&amp;")
@@ -1487,6 +1522,7 @@ export class FishingMasterGame {
         saveBtn.textContent = "儲存中...";
         this.playerName = clean;
         this._saveProgress();
+        this._sendStateIfDue(true);
         const synced = await this._submitCatchToLeaderboard({});
         this._showToast(
           synced ? `已更新釣手暱稱：${this.playerName}` : `已於本機儲存暱稱：${this.playerName}（雲端同步失敗）`
@@ -1612,6 +1648,507 @@ export class FishingMasterGame {
       };
     });
     this.ui.drawerModal.style.display = "flex";
+  }
+
+  _initMultiplayer() {
+    this._updateMpBadgeUI();
+    if (!this.mpEnabled) return;
+    this._connectMultiplayer();
+    if (!this.mpPingTimer) {
+      this.mpPingTimer = setInterval(() => {
+        if (this.mpWs && this.mpWs.readyState === WebSocket.OPEN) {
+          this._sendMpPacket({ type: "ping", ts: Date.now() });
+        }
+      }, 10000);
+    }
+  }
+
+  _mpOriginHttp() {
+    if (CLOUDFLARE_API_ORIGIN) return CLOUDFLARE_API_ORIGIN;
+    return typeof window !== "undefined" ? window.location.origin : "https://fishing-master-3d.fishing-master-3d.workers.dev";
+  }
+
+  _mpWsUrl() {
+    const httpOrigin = this._mpOriginHttp();
+    const wsOrigin = httpOrigin.replace(/^http/, "ws");
+    const qs = new URLSearchParams({
+      playerId: this.playerId,
+      name: this.playerName,
+      level: String(this._getLevelInfo().level),
+      x: this.playerPos.x.toFixed(2),
+      z: this.playerPos.z.toFixed(2),
+      yaw: this.yaw.toFixed(2),
+      env: ENV_ORDER[this.envIndex] || "lakeside",
+    });
+    return `${wsOrigin}/ws/room/${encodeURIComponent(this.mpRoomId)}?${qs.toString()}`;
+  }
+
+  _updateMpBadgeUI() {
+    const dot = this.ui.mpDot;
+    const lbl = this.ui.uiMpLabel;
+    if (!dot || !lbl) return;
+    dot.classList.remove("online", "connecting", "offline");
+    if (!this.mpEnabled || this.mpTransport === "offline") {
+      dot.classList.add("offline");
+      lbl.textContent = "單機";
+    } else if (this.mpTransport === "ws" || this.mpTransport === "http") {
+      dot.classList.add("online");
+      lbl.textContent = `聯機 ${Math.max(1, this.mpOnlineCount)}`;
+    } else {
+      dot.classList.add("connecting");
+      lbl.textContent = "連線中";
+    }
+  }
+
+  _clearMpTimers() {
+    if (this.mpConnectTimeout) {
+      clearTimeout(this.mpConnectTimeout);
+      this.mpConnectTimeout = null;
+    }
+    if (this.mpReconnectTimer) {
+      clearTimeout(this.mpReconnectTimer);
+      this.mpReconnectTimer = null;
+    }
+  }
+
+  _stopHttpFallback() {
+    if (this.mpFallbackTimer) {
+      clearInterval(this.mpFallbackTimer);
+      this.mpFallbackTimer = null;
+    }
+  }
+
+  _startHttpFallback() {
+    if (!this.mpEnabled || this.mpFallbackTimer) return;
+    this.mpTransport = "http";
+    this._updateMpBadgeUI();
+    this._syncViaHttpFallback();
+    this.mpFallbackTimer = setInterval(() => {
+      if (!this.mpEnabled || this.mpTransport === "ws") {
+        this._stopHttpFallback();
+        return;
+      }
+      this._syncViaHttpFallback();
+    }, 700);
+  }
+
+  async _syncViaHttpFallback(eventPayload = null) {
+    if (!this.mpEnabled) return;
+    try {
+      const res = await fetch(this._apiEndpoint("/api/room/sync"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          ...this._buildLocalNetState(),
+          roomId: this.mpRoomId,
+          since: this.mpLastSyncEventTs,
+          event: eventPayload,
+        }),
+      });
+      if (!res.ok) return;
+      const data = await res.json();
+      if (!data.ok || !this.mpEnabled) return;
+
+      const activeIds = new Set();
+      for (const p of data.players || []) {
+        if (!p.playerId || p.playerId === this.playerId) continue;
+        activeIds.add(p.playerId);
+        this._upsertRemotePlayer(p);
+      }
+      for (const pid of [...this.remotePlayers.keys()]) {
+        if (!activeIds.has(pid)) this._removeRemotePlayer(pid);
+      }
+      this.mpOnlineCount = this.remotePlayers.size + 1;
+      for (const ev of data.events || []) {
+        if (ev.ts && ev.ts > this.mpLastSyncEventTs) this.mpLastSyncEventTs = ev.ts;
+        this._handleRoomEvent(ev);
+      }
+      this._updateMpBadgeUI();
+    } catch {
+      // Transient network hiccup; keep polling cleanly
+    }
+  }
+
+  _connectMultiplayer() {
+    this._clearMpTimers();
+    if (!this.mpEnabled || typeof WebSocket === "undefined") {
+      if (this.mpEnabled) this._startHttpFallback();
+      return;
+    }
+    if (this.mpWs) {
+      try {
+        this.mpWs.onclose = null;
+        this.mpWs.onerror = null;
+        this.mpWs.close(1000, "Reconnect");
+      } catch {}
+      this.mpWs = null;
+    }
+
+    this.mpTransport = this.mpFallbackTimer ? "http" : "connecting";
+    this._updateMpBadgeUI();
+
+    let settled = false;
+    const ws = new WebSocket(this._mpWsUrl());
+    this.mpWs = ws;
+
+    this.mpConnectTimeout = setTimeout(() => {
+      if (!settled && ws.readyState !== WebSocket.OPEN) {
+        this.mpWsFailures += 1;
+        try { ws.close(); } catch {}
+        this._startHttpFallback();
+        if (!this.mpReconnectTimer && this.mpEnabled) {
+          this.mpReconnectTimer = setTimeout(() => this._connectMultiplayer(), 12000);
+        }
+      }
+    }, 4500);
+
+    ws.onopen = () => {
+      settled = true;
+      clearTimeout(this.mpConnectTimeout);
+      this.mpConnectTimeout = null;
+      this.mpWsFailures = 0;
+      this._stopHttpFallback();
+      this.mpTransport = "ws";
+      this._updateMpBadgeUI();
+      this._sendMpPacket({ type: "ping", ts: Date.now() });
+      this._sendStateIfDue(true);
+    };
+
+    ws.onmessage = (ev) => {
+      let msg;
+      try {
+        msg = JSON.parse(ev.data);
+      } catch {
+        return;
+      }
+      if (msg.type === "welcome") {
+        const seenIds = new Set();
+        for (const p of msg.players || []) {
+          if (!p.playerId || p.playerId === this.playerId) continue;
+          seenIds.add(p.playerId);
+          this._upsertRemotePlayer(p);
+        }
+        for (const pid of [...this.remotePlayers.keys()]) {
+          if (!seenIds.has(pid)) this._removeRemotePlayer(pid);
+        }
+        this.mpOnlineCount = this.remotePlayers.size + 1;
+        this._updateMpBadgeUI();
+      } else if (msg.type === "player_joined" && msg.player) {
+        this._upsertRemotePlayer(msg.player);
+        this.mpOnlineCount = this.remotePlayers.size + 1;
+        this._updateMpBadgeUI();
+        if (msg.player.playerId !== this.playerId) {
+          this._showToast(`🎣 ${msg.player.name} 加入了釣魚房間 [${this.mpRoomId}]`);
+        }
+      } else if (msg.type === "player_update" && msg.player) {
+        this._upsertRemotePlayer(msg.player);
+      } else if (msg.type === "player_left" && msg.playerId) {
+        this._removeRemotePlayer(msg.playerId);
+        this.mpOnlineCount = this.remotePlayers.size + 1;
+        this._updateMpBadgeUI();
+      } else if (msg.type === "room_event" && msg.event) {
+        this._handleRoomEvent(msg.event);
+      } else if (msg.type === "pong") {
+        if (msg.ts) this.mpPingMs = Math.max(1, Date.now() - Number(msg.ts));
+        if (Number.isFinite(msg.online)) this.mpOnlineCount = Math.max(1, msg.online);
+        this._updateMpBadgeUI();
+      }
+    };
+
+    ws.onclose = () => {
+      if (this.mpWs !== ws) return;
+      settled = true;
+      clearTimeout(this.mpConnectTimeout);
+      this.mpConnectTimeout = null;
+      this.mpWs = null;
+      if (!this.mpEnabled) return;
+      this.mpWsFailures += 1;
+      if (this.mpWsFailures >= 2) this._startHttpFallback();
+      else this.mpTransport = "connecting";
+      this._updateMpBadgeUI();
+      this.mpReconnectTimer = setTimeout(() => this._connectMultiplayer(), this.mpWsFailures >= 2 ? 12000 : 2500);
+    };
+
+    ws.onerror = () => {
+      // onclose handles retry & D1 fallback cleanly
+    };
+  }
+
+  _disconnectMultiplayer() {
+    this._clearMpTimers();
+    this._stopHttpFallback();
+    if (this.mpWs) {
+      try {
+        this.mpWs.onclose = null;
+        this.mpWs.close(1000, "User switched to Solo mode");
+      } catch {}
+      this.mpWs = null;
+    }
+    for (const pid of [...this.remotePlayers.keys()]) {
+      this._removeRemotePlayer(pid);
+    }
+    this.mpTransport = "offline";
+    this.mpOnlineCount = 1;
+    this._updateMpBadgeUI();
+  }
+
+  _buildLocalNetState() {
+    let bobber = null;
+    if (this.bobberRig && this.bobberRig.visible) {
+      bobber = {
+        x: Math.round(this.bobberRig.position.x * 100) / 100,
+        y: Math.round(this.bobberRig.position.y * 100) / 100,
+        z: Math.round(this.bobberRig.position.z * 100) / 100,
+      };
+    }
+    return {
+      playerId: this.playerId,
+      name: this.playerName,
+      level: this._getLevelInfo().level,
+      x: Math.round(this.playerPos.x * 1000) / 1000,
+      z: Math.round(this.playerPos.z * 1000) / 1000,
+      yaw: Math.round(this.yaw * 1000) / 1000,
+      state: this.state,
+      rodBend: Math.round((this._smoothBendY || 0) * 100) / 100,
+      bobber,
+      env: ENV_ORDER[this.envIndex] || "lakeside",
+    };
+  }
+
+  _sendMpPacket(obj) {
+    if (!this.mpEnabled) return false;
+    if (this.mpWs && this.mpWs.readyState === WebSocket.OPEN) {
+      try {
+        this.mpWs.send(JSON.stringify(obj));
+        return true;
+      } catch {
+        return false;
+      }
+    }
+    return false;
+  }
+
+  _sendStateIfDue(force = false) {
+    if (!this.mpEnabled || this.mpTransport !== "ws") return;
+    const now = performance.now();
+    if (!force && now - this.mpLastStateSentAt < 100) return;
+    const st = this._buildLocalNetState();
+    const sig = `${st.x}|${st.z}|${st.yaw}|${st.state}|${st.rodBend}|${st.name}|${st.bobber?.x ?? ""}|${st.bobber?.z ?? ""}`;
+    if (!force && sig === this.mpLastSentSig && now - this.mpLastStateSentAt < 1200) return;
+    this.mpLastSentSig = sig;
+    this.mpLastStateSentAt = now;
+    this._sendMpPacket({ type: "state", ...st });
+  }
+
+  _broadcastCatch(species, weightKg, electrocuted = false) {
+    if (!this.mpEnabled || !species) return;
+    const payload = {
+      speciesId: species.id,
+      speciesName: species.name,
+      weightKg,
+      electrocuted,
+      name: this.playerName,
+    };
+    if (!this._sendMpPacket({ type: "catch", ...payload }) && this.mpTransport === "http") {
+      this._syncViaHttpFallback({ kind: "catch", ...payload });
+    }
+  }
+
+  _sendRoomEmote(text) {
+    const clean = String(text || "").replace(/[<>&"'`]/g, "").trim().slice(0, 36);
+    if (!clean) return;
+    if (!this.mpEnabled) {
+      this._showToast("目前為單機模式，切換為「連線伺服器」後即可發送表情！");
+      return;
+    }
+    this._showToast(`💬 ${this.playerName}：${clean}`);
+    if (!this._sendMpPacket({ type: "emote", name: this.playerName, text: clean }) && this.mpTransport === "http") {
+      this._syncViaHttpFallback({ kind: "emote", text: clean });
+    }
+  }
+
+  _upsertRemotePlayer(pData) {
+    if (!pData?.playerId || pData.playerId === this.playerId || !this.assets?.createRemoteAnglerActor) return;
+    let entry = this.remotePlayers.get(pData.playerId);
+    if (!entry) {
+      const palette = ["#34d399", "#38bdf8", "#f59e0b", "#a78bfa", "#fb7185", "#2dd4bf"];
+      let h = 0;
+      for (let i = 0; i < pData.playerId.length; i++) h = (h * 33 + pData.playerId.charCodeAt(i)) | 0;
+      const accent = palette[Math.abs(h) % palette.length];
+      const actor = this.assets.createRemoteAnglerActor({
+        name: pData.name,
+        level: pData.level,
+        x: pData.x,
+        z: pData.z,
+        yaw: pData.yaw,
+        accentColor: accent,
+        tintColor: accent,
+      });
+      actor.attachToScene(this.scene);
+      entry = { actor, data: pData, lastSeen: Date.now() };
+      this.remotePlayers.set(pData.playerId, entry);
+    } else {
+      entry.data = { ...entry.data, ...pData };
+      entry.lastSeen = Date.now();
+    }
+  }
+
+  _removeRemotePlayer(playerId) {
+    const entry = this.remotePlayers.get(playerId);
+    if (entry) {
+      entry.actor.dispose();
+      this.remotePlayers.delete(playerId);
+    }
+  }
+
+  _handleRoomEvent(ev) {
+    if (!ev || ev.playerId === this.playerId) return;
+    const peer = this.remotePlayers.get(ev.playerId);
+    const name = ev.name || peer?.data?.name || "釣友";
+    if (ev.kind === "catch") {
+      const text = `${ev.electrocuted ? "⚡ 電斬 " : "🎉 釣獲 "}${ev.speciesName} ${Number(ev.weightKg || 0).toFixed(1)}kg！`;
+      if (peer?.actor) peer.actor.showBubble(text, 5.0);
+      this._showToast(`🐟 ${name} ${text}`);
+    } else if (ev.kind === "emote" && ev.text) {
+      if (peer?.actor) peer.actor.showBubble(ev.text, 4.2);
+      this._showToast(`💬 ${name}：${ev.text}`);
+    }
+  }
+
+  async _openMultiplayerDrawer() {
+    this.ui.drawerTitle.textContent = "🌐 多人即時伺服器連線";
+    const { level } = this._getLevelInfo();
+    const stateLabel = (st) =>
+      st === "SHARK_AMBUSH" ? "🦈 大白鯊襲擊中" :
+      st === "FIGHTING" ? "🔥 拉魚搏鬥中" :
+      st === "WAITING" || st === "BITE" ? "🌊 拋竿等魚中" :
+      st === "CHARGING" || st === "FLYING" ? "⚡ 拋竿中" : "🎣 棧橋待命";
+
+    const transportText = !this.mpEnabled
+      ? "⚪ 已暫停連線（單機模式）"
+      : this.mpTransport === "ws"
+      ? `🟢 24H 全球伺服器已連線 · WebSocket${this.mpPingMs ? ` (${this.mpPingMs} ms)` : ""}`
+      : this.mpTransport === "http"
+      ? "🟢 全球伺服器已連線 · HTTP 備援同步"
+      : "🟡 正在連線全球伺服器...";
+
+    const peersHtml = [
+      `
+        <div class="mp-player-row is-me">
+          <div>
+            <div style="font-size:14px;font-weight:800;color:#f8fafc;">${this._escapeHtml(this.playerName)} <span style="color:#34d399;font-size:11px;">(你 · LV.${level})</span></div>
+            <div class="lb-meta">${stateLabel(this.state)}</div>
+          </div>
+          <div style="font-size:12px;color:#34d399;font-weight:700;">線上</div>
+        </div>
+      `,
+      ...[...this.remotePlayers.values()].map((entry) => {
+        const p = entry.data;
+        return `
+          <div class="mp-player-row">
+            <div>
+              <div style="font-size:14px;font-weight:700;color:#f8fafc;">${this._escapeHtml(p.name || "翡翠釣客")} <span style="color:#94a3b8;font-size:11px;">LV.${p.level || 1}</span></div>
+              <div class="lb-meta">${stateLabel(p.state)}</div>
+            </div>
+            <div style="font-size:12px;color:#38bdf8;font-weight:700;">同步中</div>
+          </div>
+        `;
+      }),
+    ].join("");
+
+    this.ui.drawerBody.innerHTML = `
+      <div class="mp-panel-card">
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;">
+          <div>
+            <div style="font-size:13.5px;font-weight:800;color:#f8fafc;">${transportText}</div>
+            <div style="font-size:12px;color:#94a3b8;margin-top:3px;">房間：<b style="color:#38bdf8;">${this._escapeHtml(this.mpRoomId)}</b> · 線上 ${Math.max(1, this.remotePlayers.size + (this.mpEnabled ? 1 : 0))} 人</div>
+          </div>
+          <button class="action-chip" id="mp-toggle-btn" type="button">${this.mpEnabled ? "切換單機" : "開啟聯機"}</button>
+        </div>
+        <div class="mp-room-row">
+          <input id="mp-room-input" type="text" maxlength="24" autocomplete="off" placeholder="輸入自訂房號 (英文/數字)" value="${this._escapeHtml(this.mpRoomId)}" />
+          <button class="action-chip" id="mp-join-room-btn" type="button">加入房間</button>
+          <button class="action-chip" id="mp-copy-invite-btn" type="button">📋 複製邀請</button>
+        </div>
+        <div class="mp-emote-row">
+          <button class="lb-filter-chip ${this.mpRoomId === "lobby" ? "active" : ""}" data-mp-room="lobby" type="button">🏞️ 公開大廳 lobby</button>
+          <button class="lb-filter-chip ${this.mpRoomId === "shark" ? "active" : ""}" data-mp-room="shark" type="button">🦈 獵鯊專區 shark</button>
+        </div>
+      </div>
+
+      <div class="mp-panel-card">
+        <div style="font-size:12.5px;font-weight:800;color:#cbd5e1;">💬 棧橋即時互動表情</div>
+        <div class="mp-emote-row">
+          <button class="action-chip" data-mp-emote="👋 嗨！一起釣魚嗎？" type="button">👋 嗨！</button>
+          <button class="action-chip" data-mp-emote="🦈 有大白鯊出沒！" type="button">🦈 大白鯊！</button>
+          <button class="action-chip" data-mp-emote="⚡ 準備電擊反擊！" type="button">⚡ 電擊！</button>
+          <button class="action-chip" data-mp-emote="👏 太強啦！恭喜中大魚！" type="button">👏 恭喜！</button>
+        </div>
+      </div>
+
+      <div style="font-size:12.5px;font-weight:800;color:#cbd5e1;margin:8px 0 6px;">👥 同房釣手列表 (${1 + this.remotePlayers.size})</div>
+      <div id="mp-peers-list">${peersHtml}</div>
+    `;
+    this.ui.drawerModal.style.display = "flex";
+
+    const switchRoom = (rawRoom) => {
+      const next = String(rawRoom || "").toLowerCase().replace(/[^a-z0-9_-]/g, "").slice(0, 32) || "lobby";
+      this.mpRoomId = next;
+      this.mpEnabled = true;
+      for (const pid of [...this.remotePlayers.keys()]) this._removeRemotePlayer(pid);
+      this._connectMultiplayer();
+      this._showToast(`🌐 已進入多人房間：${next}`);
+      this._openMultiplayerDrawer();
+    };
+
+    const toggleBtn = document.getElementById("mp-toggle-btn");
+    if (toggleBtn) {
+      toggleBtn.onclick = () => {
+        this.mpEnabled = !this.mpEnabled;
+        if (this.mpEnabled) {
+          this._connectMultiplayer();
+          this._showToast("🌐 已連接全球多人釣魚伺服器！");
+        } else {
+          this._disconnectMultiplayer();
+          this._showToast("⚪ 已切換為單機離線模式");
+        }
+        this._openMultiplayerDrawer();
+      };
+    }
+
+    const roomInput = document.getElementById("mp-room-input");
+    const joinBtn = document.getElementById("mp-join-room-btn");
+    if (roomInput && joinBtn) {
+      roomInput.addEventListener("keydown", (e) => {
+        if (e.key === "Enter" && !e.isComposing) {
+          e.preventDefault();
+          joinBtn.click();
+        }
+      });
+      joinBtn.onclick = () => switchRoom(roomInput.value);
+    }
+
+    const copyBtn = document.getElementById("mp-copy-invite-btn");
+    if (copyBtn) {
+      copyBtn.onclick = async () => {
+        const shareUrl = `${window.location.origin}${window.location.pathname}?room=${encodeURIComponent(this.mpRoomId)}`;
+        try {
+          await navigator.clipboard.writeText(shareUrl);
+          this._showToast(`📋 已複製房間邀請連結：?room=${this.mpRoomId}`);
+        } catch {
+          this._showToast(`房間代碼：${this.mpRoomId}`);
+        }
+      };
+    }
+
+    this.ui.drawerBody.querySelectorAll("[data-mp-room]").forEach((btn) => {
+      btn.onclick = () => switchRoom(btn.getAttribute("data-mp-room"));
+    });
+    this.ui.drawerBody.querySelectorAll("[data-mp-emote]").forEach((btn) => {
+      btn.onclick = () => {
+        this._sendRoomEmote(btn.getAttribute("data-mp-emote"));
+      };
+    });
   }
 
   _updatePlayerOnPier(dt) {
@@ -1754,6 +2291,9 @@ export class FishingMasterGame {
     for (const f of this.lakeFishPool) {
       if (f.busy) continue;
       f.actor.updateSwim(t + f.phaseOffset, 4.2 * f.speed, 0.22);
+      if (f.actor.setJawOpen) {
+        f.actor.setJawOpen(0.10 + 0.05 * Math.sin(t * 2.2 + f.phaseOffset));
+      }
       f.turnTimer -= dt;
       const pos = f.actor.group.position;
       if (f.turnTimer <= 0 || Math.abs(pos.x) > 18 || pos.z > 24.5 || pos.z < -8) {
@@ -1769,6 +2309,12 @@ export class FishingMasterGame {
       pos.z += Math.cos(yaw) * f.speed * dt;
       pos.y = f.depth + 0.05 * Math.sin(t * 1.4 + f.phaseOffset);
     }
+
+    // 6. Real-Time Remote Multiplayer Angler Avatars & State Sync
+    for (const entry of this.remotePlayers.values()) {
+      entry.actor.update(dt, t, entry.data);
+    }
+    this._sendStateIfDue(false);
   }
 
   _animate() {
@@ -1965,6 +2511,9 @@ export class FishingMasterGame {
         fg.position.set(fx, jumpY, fz);
         fg.rotation.y = swayAngle + (this.fishStruggling ? Math.PI + 0.6 * Math.sin(t * 7) : 0.4 * Math.sin(t * 3));
         this.hookedFishActor.updateSwim(t, this.fishStruggling || isShark ? 15.0 : 7.0, 0.34);
+        if (isShark && this.hookedFishActor.setJawOpen) {
+          this.hookedFishActor.setJawOpen(0.38 + 0.18 * Math.sin(t * 7.5));
+        }
       }
 
       if (this.lightningTimer > 0) {
@@ -2008,28 +2557,39 @@ export class FishingMasterGame {
       const u = THREE.MathUtils.clamp(1 - this.ambushTimer / this.ambushDuration, 0, 1);
       const accel = Math.pow(u, 1.5);
       const forward = new THREE.Vector3(-Math.sin(this.yaw), 0, -Math.cos(this.yaw));
-      const endPos = this.playerPos.clone().addScaledVector(forward, 0.22);
-      endPos.y = this.playerPos.y - 0.08;
+      const endPos = this.playerPos.clone().addScaledVector(forward, 1.88);
+      endPos.y = this.playerPos.y - 0.16;
 
       if (this.hookedFishActor) {
         const fg = this.hookedFishActor.group;
-        this.hookedFishActor.setScaleMultiplier(1.65 + u * 0.65);
+        this.hookedFishActor.setScaleMultiplier(1.15 + u * 0.25);
         fg.position.lerpVectors(this.ambushStartPos, endPos, accel);
-        fg.position.y += Math.sin(u * Math.PI) * 0.55;
+        fg.position.y += Math.sin(u * Math.PI) * 0.48;
         // Snout/jaws sit on +Z in TailorRig fish GLBs, so R_y(yaw) faces dead-center toward camera!
         fg.rotation.y = this.yaw;
-        fg.rotation.x = -0.18 * (1 - accel);
+        fg.rotation.x = -0.14 * (1 - accel) + 0.04 * accel;
         this.hookedFishActor.updateSwim(t, 28.0, 0.48);
         if (this.hookedFishActor.bones.head) {
-          this.hookedFishActor.bones.head.rotation.x = -0.34;
-          this.hookedFishActor.bones.head.rotation.z = Math.sin(t * 46) * 0.26;
+          this.hookedFishActor.bones.head.rotation.x = -0.22;
+          this.hookedFishActor.bones.head.rotation.z = Math.sin(t * 42) * 0.20;
+        }
+        if (this.hookedFishActor.setJawOpen) {
+          let jawOpen;
+          if (u < 0.20) {
+            jawOpen = 0.25 + (u / 0.20) * 0.72;
+          } else if (u < 0.88) {
+            jawOpen = 0.92 + Math.sin(t * 24) * 0.08;
+          } else {
+            jawOpen = THREE.MathUtils.lerp(0.96, 0.15, (u - 0.88) / 0.12);
+          }
+          this.hookedFishActor.setJawOpen(jawOpen);
         }
         this.bobberRig.position.copy(fg.position);
 
         if (this.horrorLight) {
-          this.horrorLight.position.copy(fg.position).addScaledVector(forward, -0.35);
-          this.horrorLight.position.y += 0.25;
-          this.horrorLight.intensity = 9.0;
+          this.horrorLight.position.copy(fg.position).addScaledVector(forward, -1.65);
+          this.horrorLight.position.y += 0.14;
+          this.horrorLight.intensity = 10.5;
         }
       }
 
@@ -2047,6 +2607,9 @@ export class FishingMasterGame {
       this.camera.position.y += (Math.random() - 0.5) * shake;
 
       if (this.ambushTimer <= 0) {
+        if (this.hookedFishActor?.setJawOpen) {
+          this.hookedFishActor.setJawOpen(0);
+        }
         this.coins = Math.max(0, this.coins - 120);
         this._saveProgress();
         this._refreshTopHUD();
@@ -2144,6 +2707,9 @@ export class FishingMasterGame {
     if (this.state === "SHOWCASE") {
       if (this.trophyFishActor) {
         this.trophyFishActor.updateSwim(t, 3.2, 0.16);
+        if (this.trophyFishActor.setJawOpen) {
+          this.trophyFishActor.setJawOpen(0.58 + 0.18 * Math.sin(t * 2.6));
+        }
         this.trophyFishActor.group.rotation.y = Math.PI * 0.45 + Math.sin(t * 0.85) * 0.45;
       }
       if (this.trophyCoinMesh) {

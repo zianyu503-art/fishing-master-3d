@@ -114,6 +114,7 @@ def bind_tailorrig_skeleton(
     joints_spec: list,
     chain_classifier,
     sigma: float = 0.14,
+    vertex_weights_override: dict = None,
 ):
     """
     `joints_spec`: list of dicts:
@@ -133,7 +134,22 @@ def bind_tailorrig_skeleton(
     joints0_bytes = bytearray()
     weights0_bytes = bytearray()
 
-    for v in verts:
+    for vi, v in enumerate(verts):
+        if vertex_weights_override is not None and vi in vertex_weights_override:
+            ranked = list(vertex_weights_override[vi])[:4]
+            while len(ranked) < 4:
+                ranked.append((0, 0.0))
+            w_sum = sum(val for _, val in ranked)
+            if w_sum <= 1e-12:
+                ranked = [(0, 1.0), (0, 0.0), (0, 0.0), (0, 0.0)]
+                w_sum = 1.0
+            idxs = [int(k) for k, _ in ranked]
+            ws = [float(val / w_sum) for _, val in ranked]
+            ws[0] += 1.0 - sum(ws)
+            joints0_bytes += struct.pack("<HHHH", *idxs)
+            weights0_bytes += struct.pack("<ffff", *ws)
+            continue
+
         assigned_chain = chain_classifier(v)
         cand_bones = chain_bones.get(assigned_chain, chain_bones[joints_spec[0]["chain"]])
 
@@ -379,8 +395,127 @@ def prepare_tailorrig_arms():
     print(f"Prepared TailorRig FPS arms: {out.name} (49 joints, left/right 5-finger kinematic chains)")
 
 
+def _smoothstep(e0: float, e1: float, x: float) -> float:
+    t = max(0.0, min(1.0, (x - e0) / max(e1 - e0, 1e-8)))
+    return t * t * (3.0 - 2.0 * t)
+
+
+def slice_shark_mouth(gltf: dict, blob: bytearray, norm_pts: list) -> dict:
+    """Splits Great White Shark lip boundary to separate lower jaw and returns per-vertex joint overrides."""
+    prim = gltf["meshes"][0]["primitives"][0]
+    fin_acc_idx = prim["attributes"]["_FIN"]
+    fin_pts = read_vec3_accessor(gltf, blob, fin_acc_idx)
+    fin = [p[0] for p in fin_pts]
+
+    idx_acc_idx = prim["indices"]
+    idx_acc = gltf["accessors"][idx_acc_idx]
+    idx_bv = gltf["bufferViews"][idx_acc["bufferView"]]
+    idx_off = idx_bv.get("byteOffset", 0) + idx_acc.get("byteOffset", 0)
+    idx_cnt = idx_acc["count"]
+    idxs = list(struct.unpack_from(f"<{idx_cnt}H", blob, idx_off))
+
+    Z_HINGE = 0.315
+    Z_SPLIT_START = 0.326
+    Z_TIP = 0.442
+
+    def y_cut(z: float) -> float:
+        u = max(0.0, min(1.0, (z - Z_HINGE) / (Z_TIP - Z_HINGE)))
+        return 0.003 + 0.012 * math.sin(u * math.pi)
+
+    lower_tris = []
+    upper_tris = []
+    for i in range(0, len(idxs), 3):
+        a, b, c = idxs[i], idxs[i + 1], idxs[i + 2]
+        if fin[a] == 0.0 and fin[b] == 0.0 and fin[c] == 0.0:
+            cz = (norm_pts[a][2] + norm_pts[b][2] + norm_pts[c][2]) / 3.0
+            cy = (norm_pts[a][1] + norm_pts[b][1] + norm_pts[c][1]) / 3.0
+            if Z_HINGE <= cz <= Z_TIP and cy < y_cut(cz):
+                lower_tris.append((a, b, c))
+                continue
+        upper_tris.append((a, b, c))
+
+    lower_v = {v for tri in lower_tris for v in tri}
+    upper_v = {v for tri in upper_tris for v in tri}
+    shared = lower_v & upper_v
+    split_v = sorted(v for v in shared if norm_pts[v][2] >= Z_SPLIT_START)
+    hinge_v = sorted(v for v in shared if norm_pts[v][2] < Z_SPLIT_START)
+
+    pos_acc = gltf["accessors"][prim["attributes"]["POSITION"]]
+    old_vbv_idx = pos_acc["bufferView"]
+    old_vbv = gltf["bufferViews"][old_vbv_idx]
+    stride = old_vbv.get("byteStride", 56)
+    vbase = old_vbv.get("byteOffset", 0)
+    orig_vcount = pos_acc["count"]
+
+    new_vbuf = bytearray(blob[vbase : vbase + orig_vcount * stride])
+    all_pts = [list(p) for p in norm_pts]
+    dup_map = {}
+    for v in split_v:
+        rec_start = v * stride
+        new_vbuf.extend(new_vbuf[rec_start : rec_start + stride])
+        dup_map[v] = len(all_pts)
+        all_pts.append(list(norm_pts[v]))
+
+    assert len(all_pts) < 65535, f"Vertex count {len(all_pts)} exceeds UNSIGNED_SHORT limit"
+
+    new_idxs = []
+    for a, b, c in upper_tris:
+        new_idxs.extend((a, b, c))
+    for a, b, c in lower_tris:
+        new_idxs.extend((dup_map.get(a, a), dup_map.get(b, b), dup_map.get(c, c)))
+
+    new_vbv = append_buffer_view(gltf, blob, bytes(new_vbuf), target=34962)
+    gltf["bufferViews"][new_vbv]["byteStride"] = stride
+
+    for acc_idx in prim["attributes"].values():
+        acc = gltf["accessors"][acc_idx]
+        if acc["bufferView"] == old_vbv_idx:
+            acc["bufferView"] = new_vbv
+            acc["count"] = len(all_pts)
+
+    new_idx_bytes = struct.pack(f"<{len(new_idxs)}H", *new_idxs)
+    new_ibv = append_buffer_view(gltf, blob, new_idx_bytes, target=34963)
+    idx_acc["bufferView"] = new_ibv
+    idx_acc["byteOffset"] = 0
+    idx_acc["count"] = len(new_idxs)
+
+    # Joints: 0 = fish_root, 1 = head, 9 = jaw_lower
+    lower_exclusive = (lower_v - shared) | set(dup_map.values())
+    hinge_set = set(hinge_v)
+    overrides = {}
+
+    for vi in lower_exclusive:
+        z = all_pts[vi][2]
+        if z >= 0.335:
+            overrides[vi] = [(9, 1.0)]
+        else:
+            w = _smoothstep(0.305, 0.335, z)
+            overrides[vi] = [(9, w), (1, 1.0 - w)]
+
+    for vi in hinge_set:
+        z = all_pts[vi][2]
+        w = 0.45 * _smoothstep(0.300, 0.326, z)
+        overrides[vi] = [(9, w), (1, 1.0 - w)]
+
+    for vi, p in enumerate(all_pts):
+        if vi in lower_exclusive or vi in hinge_set:
+            continue
+        z, y = p[2], p[1]
+        if z >= 0.320:
+            overrides[vi] = [(1, 1.0)]
+        elif 0.265 <= z < 0.320 and y >= -0.08:
+            w_h = 0.55 + 0.45 * _smoothstep(0.265, 0.320, z)
+            overrides[vi] = [(1, w_h), (0, 1.0 - w_h)]
+
+    print(
+        f"Sliced Great White Shark mouth seam: +{len(split_v)} lip verts "
+        f"({len(lower_tris)} lower tris, {len(hinge_v)} hinge verts, total verts={len(all_pts)})"
+    )
+    return overrides
+
+
 def rig_world_fish(species_id: str, z_stretch: float = 1.0):
-    """Normalizes `codepawl/world-fish-glb` meshes (+X snout -> +Z snout, length = 1.0) and binds 9-joint TailorRig skin."""
+    """Normalizes `codepawl/world-fish-glb` meshes (+X snout -> +Z snout, length = 1.0) and binds TailorRig skin."""
     src = HF_DIR / "world_fish" / f"{species_id}.glb"
     gltf, blob = load_glb(src)
     prim = gltf["meshes"][0]["primitives"][0]
@@ -415,9 +550,12 @@ def rig_world_fish(species_id: str, z_stretch: float = 1.0):
         pbr["metallicFactor"] = 0.05
         pbr["roughnessFactor"] = 0.42
 
+    is_shark = species_id == "great_white_shark"
+    head_pos = (0.0, 0.015, 0.315) if is_shark else (0.0, 0.00, 0.38)
+
     joints = [
         {"name": "fish_root",     "parent": -1, "pos": (0.0,  0.00,  0.14), "chain": "spine"},
-        {"name": "head",          "parent":  0, "pos": (0.0,  0.00,  0.38), "chain": "spine"},
+        {"name": "head",          "parent":  0, "pos": head_pos,            "chain": "spine"},
         {"name": "spine_01",      "parent":  0, "pos": (0.0,  0.00, -0.03), "chain": "spine"},
         {"name": "spine_02",      "parent":  2, "pos": (0.0,  0.00, -0.20), "chain": "spine"},
         {"name": "tail_peduncle", "parent":  3, "pos": (0.0,  0.00, -0.35), "chain": "spine"},
@@ -426,6 +564,11 @@ def rig_world_fish(species_id: str, z_stretch: float = 1.0):
         {"name": "pectoral_l",    "parent":  0, "pos": (0.09, -0.07, 0.12), "chain": "pec_l_aux"},
         {"name": "pectoral_r",    "parent":  0, "pos": (-0.09, -0.07, 0.12), "chain": "pec_r_aux"},
     ]
+
+    overrides = None
+    if is_shark:
+        joints.append({"name": "jaw_lower", "parent": 1, "pos": (0.0, 0.005, 0.320), "chain": "jaw_lower"})
+        overrides = slice_shark_mouth(gltf, blob, norm_pts)
 
     def classify_fish_vertex(v):
         x, y, z = v
@@ -437,10 +580,10 @@ def rig_world_fish(species_id: str, z_stretch: float = 1.0):
             return "pec_r_aux"
         return "spine"
 
-    bind_tailorrig_skeleton(gltf, blob, joints, classify_fish_vertex, sigma=0.12)
+    bind_tailorrig_skeleton(gltf, blob, joints, classify_fish_vertex, sigma=0.12, vertex_weights_override=overrides)
     out = TRIG_OUT / f"{species_id}_tailorrig.glb"
     save_glb(out, gltf, blob)
-    print(f"Created TailorRig HF world-fish: {out.name} ({len(joints)} joints, 4 chains)")
+    print(f"Created TailorRig HF world-fish: {out.name} ({len(joints)} joints, {len(set(j['chain'] for j in joints))} chains)")
 
 
 if __name__ == "__main__":

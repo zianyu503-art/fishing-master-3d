@@ -1,3 +1,5 @@
+import { DurableObject } from "cloudflare:workers";
+
 const SPECIES_LIMITS = {
   largemouth_bass: { name: "鱸魚", maxKg: 3.5 },
   rainbow_trout: { name: "虹鱒", maxKg: 6.0 },
@@ -198,11 +200,350 @@ async function handleLeaderboardPost(request, env) {
   return jsonResponse({ ok: true, storage: "d1", playerId, playerName, coins });
 }
 
+function sanitizeRoomId(raw) {
+  return String(raw || "lobby").toLowerCase().replace(/[^a-z0-9_-]/g, "").slice(0, 32) || "lobby";
+}
+
+function sanitizePlayerId(raw) {
+  return String(raw || "").replace(/[^a-zA-Z0-9_-]/g, "").slice(0, 48);
+}
+
+function sanitizeRoomState(raw, fallback = {}) {
+  const num = (v, def, min, max) => {
+    const n = Number(v);
+    return Number.isFinite(n) ? Math.min(max, Math.max(min, n)) : def;
+  };
+  let bobber = null;
+  if (raw?.bobber && Number.isFinite(Number(raw.bobber.x)) && Number.isFinite(Number(raw.bobber.z))) {
+    bobber = {
+      x: Math.round(num(raw.bobber.x, 0, -60, 60) * 1000) / 1000,
+      y: Math.round(num(raw.bobber.y, 0.02, -5, 15) * 1000) / 1000,
+      z: Math.round(num(raw.bobber.z, 12, -60, 60) * 1000) / 1000,
+    };
+  }
+  const allowedStates = new Set(["IDLE", "CHARGING", "FLYING", "WAITING", "BITE", "FIGHTING", "SHARK_AMBUSH", "SHOWCASE"]);
+  const st = allowedStates.has(raw?.state) ? raw.state : (fallback.state || "IDLE");
+  return {
+    playerId: sanitizePlayerId(raw?.playerId || fallback.playerId),
+    name: cleanName(raw?.name ?? fallback.name),
+    level: Math.max(1, Math.min(99, Math.round(Number(raw?.level ?? fallback.level) || 1))),
+    x: Math.round(num(raw?.x, fallback.x ?? 0, -1.45, 1.45) * 1000) / 1000,
+    z: Math.round(num(raw?.z, fallback.z ?? 30.0, 25.8, 36.2) * 1000) / 1000,
+    yaw: Math.round(num(raw?.yaw, fallback.yaw ?? 0, -3.5, 3.5) * 1000) / 1000,
+    state: st,
+    rodBend: Math.round(num(raw?.rodBend, fallback.rodBend ?? 0, 0, 1.2) * 1000) / 1000,
+    bobber,
+    env: String(raw?.env || fallback.env || "lakeside").replace(/[^a-z]/g, "").slice(0, 16),
+    updatedAt: Date.now(),
+  };
+}
+
+export class FishingRoom extends DurableObject {
+  _broadcast(payloadObj, excludeWs = null) {
+    const raw = JSON.stringify(payloadObj);
+    for (const peer of this.ctx.getWebSockets()) {
+      if (peer === excludeWs) continue;
+      try {
+        peer.send(raw);
+      } catch {
+        // Stale socket will trigger webSocketClose/webSocketError
+      }
+    }
+  }
+
+  _collectPlayers(excludeWs = null) {
+    const list = [];
+    for (const ws of this.ctx.getWebSockets()) {
+      if (ws === excludeWs) continue;
+      try {
+        const att = ws.deserializeAttachment();
+        if (att && att.playerId) list.push(att);
+      } catch {
+        // Ignore uninitialized attachment
+      }
+    }
+    return list;
+  }
+
+  async fetch(request) {
+    const url = new URL(request.url);
+    if (url.pathname.endsWith("/status")) {
+      const players = this._collectPlayers();
+      return jsonResponse({
+        ok: true,
+        transport: "durable_object_ws",
+        online: players.length,
+        players,
+        serverTime: Date.now(),
+      });
+    }
+
+    if (request.headers.get("Upgrade") !== "websocket") {
+      return jsonResponse({ ok: false, error: "Expected WebSocket upgrade" }, 426);
+    }
+
+    const playerId = sanitizePlayerId(url.searchParams.get("playerId")) || `guest-${crypto.randomUUID().slice(0, 8)}`;
+    const roomId = sanitizeRoomId(url.searchParams.get("room") || url.pathname.split("/").pop());
+    const initial = sanitizeRoomState({
+      playerId,
+      name: url.searchParams.get("name"),
+      level: url.searchParams.get("level"),
+      x: url.searchParams.get("x"),
+      z: url.searchParams.get("z"),
+      yaw: url.searchParams.get("yaw"),
+      state: "IDLE",
+      env: url.searchParams.get("env"),
+    });
+
+    // Replace any stale socket from the exact same playerId
+    for (const existing of this.ctx.getWebSockets()) {
+      try {
+        const att = existing.deserializeAttachment();
+        if (att?.playerId === playerId) {
+          existing.close(1000, "Replaced by newer session");
+        }
+      } catch {}
+    }
+
+    const pair = new WebSocketPair();
+    const [client, server] = Object.values(pair);
+    this.ctx.acceptWebSocket(server);
+    server.serializeAttachment(initial);
+
+    const peers = this._collectPlayers(server);
+    server.send(
+      JSON.stringify({
+        type: "welcome",
+        roomId,
+        playerId,
+        serverTime: Date.now(),
+        online: peers.length + 1,
+        players: peers,
+      })
+    );
+    this._broadcast({ type: "player_joined", player: initial }, server);
+
+    return new Response(null, { status: 101, webSocket: client });
+  }
+
+  async webSocketMessage(ws, message) {
+    let msg;
+    try {
+      const text = typeof message === "string" ? message : new TextDecoder().decode(message);
+      msg = JSON.parse(text);
+    } catch {
+      return;
+    }
+    const att = ws.deserializeAttachment() || {};
+    if (!att.playerId) return;
+
+    if (msg.type === "ping") {
+      ws.send(
+        JSON.stringify({
+          type: "pong",
+          ts: msg.ts || Date.now(),
+          serverTime: Date.now(),
+          online: this.ctx.getWebSockets().length,
+        })
+      );
+      return;
+    }
+
+    if (msg.type === "state") {
+      const next = sanitizeRoomState(msg, att);
+      ws.serializeAttachment(next);
+      this._broadcast({ type: "player_update", player: next }, ws);
+      return;
+    }
+
+    if (msg.type === "catch" && SPECIES_LIMITS[msg.speciesId]) {
+      const spec = SPECIES_LIMITS[msg.speciesId];
+      const w = Number(msg.weightKg);
+      if (!Number.isFinite(w) || w < 0.05 || w > spec.maxKg) return;
+      const event = {
+        kind: "catch",
+        playerId: att.playerId,
+        name: cleanName(msg.name || att.name),
+        speciesId: msg.speciesId,
+        speciesName: spec.name,
+        weightKg: Math.round(w * 100) / 100,
+        electrocuted: Boolean(msg.electrocuted),
+        ts: Date.now(),
+      };
+      this._broadcast({ type: "room_event", event }, ws);
+      return;
+    }
+
+    if (msg.type === "emote") {
+      const cleanText = String(msg.text || "").replace(/[<>&"'`]/g, "").trim().slice(0, 36);
+      if (!cleanText) return;
+      const event = {
+        kind: "emote",
+        playerId: att.playerId,
+        name: cleanName(msg.name || att.name),
+        text: cleanText,
+        ts: Date.now(),
+      };
+      this._broadcast({ type: "room_event", event }, ws);
+    }
+  }
+
+  async webSocketClose(ws) {
+    try {
+      const att = ws.deserializeAttachment();
+      if (att?.playerId) {
+        this._broadcast({ type: "player_left", playerId: att.playerId, name: att.name }, ws);
+      }
+    } catch {}
+  }
+
+  async webSocketError(ws) {
+    await this.webSocketClose(ws);
+  }
+}
+
+async function handleRoomSyncPost(request, env) {
+  let body;
+  try {
+    body = await request.json();
+  } catch {
+    return jsonResponse({ ok: false, error: "Invalid JSON" }, 400);
+  }
+  const roomId = sanitizeRoomId(body.roomId);
+  const st = sanitizeRoomState(body);
+  if (!st.playerId) return jsonResponse({ ok: false, error: "Missing playerId" }, 400);
+  const now = Date.now();
+  const since = Number(body.since) || now - 8000;
+
+  if (!env.DB) {
+    return jsonResponse({ ok: true, transport: "memory", roomId, players: [], events: [], serverTime: now });
+  }
+
+  await env.DB.prepare(
+    `INSERT INTO room_presence (room_id, player_id, player_name, level, x, z, yaw, state, rod_bend, bobber_json, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+     ON CONFLICT(room_id, player_id) DO UPDATE SET
+       player_name = excluded.player_name,
+       level = excluded.level,
+       x = excluded.x,
+       z = excluded.z,
+       yaw = excluded.yaw,
+       state = excluded.state,
+       rod_bend = excluded.rod_bend,
+       bobber_json = excluded.bobber_json,
+       updated_at = excluded.updated_at`
+  )
+    .bind(
+      roomId,
+      st.playerId,
+      st.name,
+      st.level,
+      st.x,
+      st.z,
+      st.yaw,
+      st.state,
+      st.rodBend,
+      st.bobber ? JSON.stringify(st.bobber) : "",
+      now
+    )
+    .run();
+
+  if (body.event && typeof body.event === "object") {
+    const kind = body.event.kind === "catch" ? "catch" : body.event.kind === "emote" ? "emote" : "";
+    if (kind) {
+      await env.DB.prepare(
+        `INSERT INTO room_events (room_id, player_id, player_name, kind, payload_json, created_at)
+         VALUES (?, ?, ?, ?, ?, ?)`
+      )
+        .bind(roomId, st.playerId, st.name, kind, JSON.stringify(body.event).slice(0, 512), now)
+        .run();
+    }
+  }
+
+  await env.DB.prepare(`DELETE FROM room_presence WHERE updated_at < ?`).bind(now - 15000).run();
+  await env.DB.prepare(`DELETE FROM room_events WHERE created_at < ?`).bind(now - 60000).run();
+
+  const { results: pRows } = await env.DB.prepare(
+    `SELECT player_id, player_name, level, x, z, yaw, state, rod_bend, bobber_json, updated_at
+     FROM room_presence WHERE room_id = ? AND player_id != ?`
+  )
+    .bind(roomId, st.playerId)
+    .all();
+
+  const { results: eRows } = await env.DB.prepare(
+    `SELECT player_id, player_name, kind, payload_json, created_at
+     FROM room_events WHERE room_id = ? AND created_at > ? AND player_id != ?
+     ORDER BY created_at ASC LIMIT 20`
+  )
+    .bind(roomId, since, st.playerId)
+    .all();
+
+  const players = (pRows || []).map((r) => {
+    let bobber = null;
+    try {
+      if (r.bobber_json) bobber = JSON.parse(r.bobber_json);
+    } catch {}
+    return {
+      playerId: r.player_id,
+      name: r.player_name,
+      level: r.level,
+      x: r.x,
+      z: r.z,
+      yaw: r.yaw,
+      state: r.state,
+      rodBend: r.rod_bend,
+      bobber,
+      updatedAt: r.updated_at,
+    };
+  });
+
+  const events = (eRows || []).map((e) => {
+    let payload = {};
+    try {
+      payload = JSON.parse(e.payload_json);
+    } catch {}
+    return { ...payload, playerId: e.player_id, name: e.player_name, kind: e.kind, ts: e.created_at };
+  });
+
+  return jsonResponse({
+    ok: true,
+    transport: "d1_http",
+    roomId,
+    online: players.length + 1,
+    players,
+    events,
+    serverTime: now,
+  });
+}
+
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
     if (request.method === "OPTIONS") {
       return new Response(null, { status: 204, headers: CORS_HEADERS });
+    }
+    if (url.pathname.startsWith("/ws/room/")) {
+      if (!env.FISHING_ROOMS) {
+        return jsonResponse({ ok: false, error: "Durable Objects unavailable" }, 503);
+      }
+      const rawRoom = url.pathname.slice("/ws/room/".length);
+      const roomId = sanitizeRoomId(rawRoom);
+      const id = env.FISHING_ROOMS.idFromName(roomId);
+      const stub = env.FISHING_ROOMS.get(id);
+      return stub.fetch(request);
+    }
+    if (url.pathname === "/api/room/status" && request.method === "GET") {
+      const roomId = sanitizeRoomId(url.searchParams.get("room") || "lobby");
+      if (env.FISHING_ROOMS) {
+        const stub = env.FISHING_ROOMS.get(env.FISHING_ROOMS.idFromName(roomId));
+        const res = await stub.fetch("https://room/status");
+        const data = await res.json();
+        return jsonResponse({ ...data, roomId });
+      }
+      return jsonResponse({ ok: true, roomId, online: 0, transport: "d1_only", players: [] });
+    }
+    if (url.pathname === "/api/room/sync" && request.method === "POST") {
+      return handleRoomSyncPost(request, env);
     }
     if (url.pathname === "/api/leaderboard") {
       if (request.method === "GET") return handleLeaderboardGet(url, env);
