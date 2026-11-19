@@ -122,6 +122,9 @@ async function handleLeaderboardPost(request, env) {
   }
 
   if (!env.DB) {
+    for (const c of FALLBACK_CATCHES) {
+      if (c.player_id === playerId) c.player_name = playerName;
+    }
     if (validCatch) {
       FALLBACK_CATCHES.push({
         player_id: playerId,
@@ -155,6 +158,11 @@ async function handleLeaderboardPost(request, env) {
       .bind(playerId, playerName, validCatch.speciesId, validCatch.speciesName, validCatch.weightKg, now)
       .run();
   }
+
+  // Sync updated player_name across all prior trophy catches for this player
+  await env.DB.prepare(`UPDATE leaderboard_catches SET player_name = ? WHERE player_id = ?`)
+    .bind(playerName, playerId)
+    .run();
 
   const existing = await env.DB.prepare(
     `SELECT best_weight_kg, best_species_id, best_species_name FROM leaderboard_players WHERE player_id = ?`

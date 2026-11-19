@@ -709,6 +709,7 @@ export class FishingMasterGame {
     });
 
     window.addEventListener("keydown", (e) => {
+      if (e.target && (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA")) return;
       this.keys[e.code] = true;
       if (e.code === "Space" && !e.repeat) {
         this._handlePrimaryDown();
@@ -717,6 +718,7 @@ export class FishingMasterGame {
       }
     });
     window.addEventListener("keyup", (e) => {
+      if (e.target && (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA")) return;
       this.keys[e.code] = false;
       if (e.code === "Space") {
         this._handlePrimaryUp();
@@ -1372,6 +1374,15 @@ export class FishingMasterGame {
     this.ui.drawerModal.style.display = "flex";
   }
 
+  _escapeHtml(str) {
+    return String(str ?? "")
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#39;");
+  }
+
   _apiEndpoint(path) {
     return CLOUDFLARE_API_ORIGIN ? `${CLOUDFLARE_API_ORIGIN}${path}` : path;
   }
@@ -1380,7 +1391,12 @@ export class FishingMasterGame {
     const totalCatches = Object.values(this.compendium).reduce((acc, r) => acc + (r.count || 0), 0);
     const { level } = this._getLevelInfo();
 
-    // Update local fallback record immediately
+    // Update local fallback records immediately (syncing renamed player_name on all matching rows)
+    for (const r of this.localLeaderboard) {
+      if (r.player_id === this.playerId) {
+        r.player_name = this.playerName;
+      }
+    }
     const idx = this.localLeaderboard.findIndex((r) => r.player_id === this.playerId);
     const prevRec = idx >= 0 ? this.localLeaderboard[idx] : { best_weight_kg: 0, weight_kg: 0 };
     const prevBest = Math.max(prevRec.weight_kg || 0, prevRec.best_weight_kg || 0);
@@ -1400,7 +1416,7 @@ export class FishingMasterGame {
     this._saveProgress();
 
     try {
-      await fetch(this._apiEndpoint("/api/leaderboard"), {
+      const res = await fetch(this._apiEndpoint("/api/leaderboard"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -1412,8 +1428,9 @@ export class FishingMasterGame {
           catch: species && weightKg ? { speciesId: species.id, weightKg } : null,
         }),
       });
+      return res.ok;
     } catch {
-      // Offline or local-only fallback already persisted
+      return false;
     }
   }
 
@@ -1429,7 +1446,7 @@ export class FishingMasterGame {
     this.ui.drawerBody.innerHTML = `
       <div class="lb-nick-bar">
         <span style="font-size:12px;color:#94a3b8;white-space:nowrap;">釣手暱稱</span>
-        <input id="lb-nick-input" type="text" maxlength="18" value="${this.playerName.replace(/"/g, "&quot;")}" />
+        <input id="lb-nick-input" type="text" maxlength="18" autocomplete="off" placeholder="輸入釣手暱稱" />
         <button class="action-chip" id="lb-nick-save" type="button">儲存</button>
       </div>
       <div class="lb-tabs">
@@ -1449,14 +1466,31 @@ export class FishingMasterGame {
     });
     const saveBtn = document.getElementById("lb-nick-save");
     const nickInput = document.getElementById("lb-nick-input");
+    if (nickInput) {
+      nickInput.value = this.playerName;
+    }
     if (saveBtn && nickInput) {
+      nickInput.addEventListener("keydown", (e) => {
+        if (e.key === "Enter" && !e.isComposing) {
+          e.preventDefault();
+          saveBtn.click();
+        }
+      });
       saveBtn.onclick = async () => {
-        const clean = nickInput.value.trim().slice(0, 18);
-        if (!clean) return;
+        const clean = nickInput.value.replace(/[<>&"'`]/g, "").trim().slice(0, 18);
+        if (!clean) {
+          this._showToast("請輸入有效的釣手暱稱");
+          nickInput.focus();
+          return;
+        }
+        saveBtn.disabled = true;
+        saveBtn.textContent = "儲存中...";
         this.playerName = clean;
         this._saveProgress();
-        await this._submitCatchToLeaderboard({});
-        this._showToast(`已更新釣手暱稱：${this.playerName}`);
+        const synced = await this._submitCatchToLeaderboard({});
+        this._showToast(
+          synced ? `已更新釣手暱稱：${this.playerName}` : `已於本機儲存暱稱：${this.playerName}（雲端同步失敗）`
+        );
         this._openLeaderboardDrawer(tab, speciesFilter);
       };
     }
@@ -1508,13 +1542,14 @@ export class FishingMasterGame {
       .map((row, idx) => {
         const medal = idx === 0 ? "🥇" : idx === 1 ? "🥈" : idx === 2 ? "🥉" : `#${idx + 1}`;
         const isMe = row.player_id === this.playerId;
+        const safeName = this._escapeHtml(row.player_name);
         if (tab === "wealth") {
           return `
             <div class="lb-row ${isMe ? "is-me" : ""}">
               <div style="display:flex;align-items:center;gap:10px;min-width:0;">
                 <div class="lb-rank tabular">${medal}</div>
                 <div style="min-width:0;">
-                  <div style="font-size:14px;font-weight:700;color:#f8fafc;">${row.player_name} ${isMe ? '<span style="color:#34d399;font-size:11px;">(你)</span>' : ""}</div>
+                  <div style="font-size:14px;font-weight:700;color:#f8fafc;">${safeName} ${isMe ? '<span style="color:#34d399;font-size:11px;">(你)</span>' : ""}</div>
                   <div class="lb-meta tabular">LV.${row.level || 1} · 累計釣獲 ${row.total_catches || 0} 尾</div>
                 </div>
               </div>
@@ -1527,8 +1562,8 @@ export class FishingMasterGame {
             <div style="display:flex;align-items:center;gap:10px;min-width:0;">
               <div class="lb-rank tabular">${medal}</div>
               <div style="min-width:0;">
-                <div style="font-size:14px;font-weight:700;color:#f8fafc;">${row.player_name} ${isMe ? '<span style="color:#34d399;font-size:11px;">(你)</span>' : ""}</div>
-                <div class="lb-meta">${row.species_name || "未知魚種"}</div>
+                <div style="font-size:14px;font-weight:700;color:#f8fafc;">${safeName} ${isMe ? '<span style="color:#34d399;font-size:11px;">(你)</span>' : ""}</div>
+                <div class="lb-meta">${this._escapeHtml(row.species_name || "未知魚種")}</div>
               </div>
             </div>
             <div class="tabular" style="font-size:15px;font-weight:800;color:#38bdf8;white-space:nowrap;">${Number(row.weight_kg || 0).toFixed(2)} kg</div>

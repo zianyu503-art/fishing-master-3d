@@ -116,6 +116,11 @@ async function handleLeaderboardPost(request, env) {
       .run();
   }
 
+  // Sync updated player_name across all prior trophy catches for this player
+  await env.DB.prepare(`UPDATE leaderboard_catches SET player_name = ? WHERE player_id = ?`)
+    .bind(playerName, playerId)
+    .run();
+
   const existing = await env.DB.prepare(
     `SELECT best_weight_kg, best_species_id, best_species_name FROM leaderboard_players WHERE player_id = ?`
   )

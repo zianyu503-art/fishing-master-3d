@@ -679,7 +679,7 @@
       opacity: 0;
       pointer-events: none;
       transition: all 0.22s var(--spring);
-      z-index: 50;
+      z-index: 80;
       max-width: 88vw;
       text-align: center;
       box-shadow: 0 8px 24px rgba(0, 0, 0, 0.32);
@@ -862,9 +862,11 @@
       border-radius: 999px;
       padding: 6px 12px;
       color: #f8fafc;
-      font-size: 13px;
+      font-size: 16px;
       font-weight: 600;
       outline: none;
+      touch-action: manipulation;
+      pointer-events: auto;
       user-select: text;
       -webkit-user-select: text;
     }
