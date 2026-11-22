@@ -115,15 +115,13 @@ def bind_tailorrig_skeleton(
     chain_classifier,
     sigma: float = 0.14,
     vertex_weights_override: dict = None,
+    preserve_materials: bool = False,
 ):
     """
     `joints_spec`: list of dicts:
       {"name": str, "parent": int (-1 for root), "pos": (x, y, z), "chain": str}
     `chain_classifier(v)` -> chain_name (Stage 1 TailorRig semantic chain assignment)
     """
-    prim = gltf["meshes"][0]["primitives"][0]
-    verts = read_vec3_accessor(gltf, blob, prim["attributes"]["POSITION"])
-    V = len(verts)
     J = len(joints_spec)
 
     # Group bone segments by chain
@@ -131,72 +129,98 @@ def bind_tailorrig_skeleton(
     for j_idx, j in enumerate(joints_spec):
         chain_bones.setdefault(j["chain"], []).append(j_idx)
 
-    joints0_bytes = bytearray()
-    weights0_bytes = bytearray()
+    gltf.setdefault("accessors", [])
 
-    for vi, v in enumerate(verts):
-        if vertex_weights_override is not None and vi in vertex_weights_override:
-            ranked = list(vertex_weights_override[vi])[:4]
+    # Skin EVERY primitive of the mesh so multi-material models remain unified on one skeleton
+    for prim_idx, prim in enumerate(gltf["meshes"][0]["primitives"]):
+        verts = read_vec3_accessor(gltf, blob, prim["attributes"]["POSITION"])
+        V = len(verts)
+        use_override = vertex_weights_override is not None and prim_idx == 0
+
+        joints0_bytes = bytearray()
+        weights0_bytes = bytearray()
+
+        for vi, v in enumerate(verts):
+            if use_override and vi in vertex_weights_override:
+                ranked = list(vertex_weights_override[vi])[:4]
+                while len(ranked) < 4:
+                    ranked.append((0, 0.0))
+                w_sum = sum(val for _, val in ranked)
+                if w_sum <= 1e-12:
+                    ranked = [(0, 1.0), (0, 0.0), (0, 0.0), (0, 0.0)]
+                    w_sum = 1.0
+                idxs = [int(k) for k, _ in ranked]
+                ws = [float(val / w_sum) for _, val in ranked]
+                ws[0] += 1.0 - sum(ws)
+                joints0_bytes += struct.pack("<HHHH", *idxs)
+                weights0_bytes += struct.pack("<ffff", *ws)
+                continue
+
+            assigned_chain = chain_classifier(v)
+            cand_bones = chain_bones.get(assigned_chain, chain_bones[joints_spec[0]["chain"]])
+
+            # Stage 2: Smooth bone refinement strictly within assigned kinematic chain
+            bone_scores = {}
+            for j_idx in cand_bones:
+                p_idx = joints_spec[j_idx]["parent"]
+                j_pos = joints_spec[j_idx]["pos"]
+                # Check segments to children in the same chain, or to parent
+                children_in_chain = [c for c in cand_bones if joints_spec[c]["parent"] == j_idx]
+                if children_in_chain:
+                    for c_idx in children_in_chain:
+                        c_pos = joints_spec[c_idx]["pos"]
+                        w_seg, t = point_segment_weight(v, j_pos, c_pos, sigma=sigma)
+                        bone_scores[j_idx] = bone_scores.get(j_idx, 0.0) + w_seg * (1.0 - t)
+                        bone_scores[c_idx] = bone_scores.get(c_idx, 0.0) + w_seg * t
+                elif p_idx >= 0:
+                    p_pos = joints_spec[p_idx]["pos"]
+                    w_seg, t = point_segment_weight(v, p_pos, j_pos, sigma=sigma)
+                    bone_scores[j_idx] = bone_scores.get(j_idx, 0.0) + w_seg * (0.35 + 0.65 * t)
+                    if joints_spec[p_idx]["chain"] == assigned_chain:
+                        bone_scores[p_idx] = bone_scores.get(p_idx, 0.0) + w_seg * (1.0 - t) * 0.5
+                else:
+                    w_pt, _ = point_segment_weight(v, j_pos, j_pos, sigma=sigma)
+                    bone_scores[j_idx] = bone_scores.get(j_idx, 0.0) + w_pt
+
+            # TailorRig rigconv.py dense_top4 normalization
+            ranked = sorted(bone_scores.items(), key=lambda kv: kv[1], reverse=True)[:4]
             while len(ranked) < 4:
                 ranked.append((0, 0.0))
             w_sum = sum(val for _, val in ranked)
             if w_sum <= 1e-12:
-                ranked = [(0, 1.0), (0, 0.0), (0, 0.0), (0, 0.0)]
+                ranked = [(cand_bones[0], 1.0), (0, 0.0), (0, 0.0), (0, 0.0)]
                 w_sum = 1.0
             idxs = [int(k) for k, _ in ranked]
             ws = [float(val / w_sum) for _, val in ranked]
+            # Ensure exact 1.0 sum
             ws[0] += 1.0 - sum(ws)
+
             joints0_bytes += struct.pack("<HHHH", *idxs)
             weights0_bytes += struct.pack("<ffff", *ws)
-            continue
 
-        assigned_chain = chain_classifier(v)
-        cand_bones = chain_bones.get(assigned_chain, chain_bones[joints_spec[0]["chain"]])
-
-        # Stage 2: Smooth bone refinement strictly within assigned kinematic chain
-        bone_scores = {}
-        for j_idx in cand_bones:
-            p_idx = joints_spec[j_idx]["parent"]
-            j_pos = joints_spec[j_idx]["pos"]
-            # Check segments to children in the same chain, or to parent
-            children_in_chain = [c for c in cand_bones if joints_spec[c]["parent"] == j_idx]
-            if children_in_chain:
-                for c_idx in children_in_chain:
-                    c_pos = joints_spec[c_idx]["pos"]
-                    w_seg, t = point_segment_weight(v, j_pos, c_pos, sigma=sigma)
-                    bone_scores[j_idx] = bone_scores.get(j_idx, 0.0) + w_seg * (1.0 - t)
-                    bone_scores[c_idx] = bone_scores.get(c_idx, 0.0) + w_seg * t
-            elif p_idx >= 0:
-                p_pos = joints_spec[p_idx]["pos"]
-                w_seg, t = point_segment_weight(v, p_pos, j_pos, sigma=sigma)
-                bone_scores[j_idx] = bone_scores.get(j_idx, 0.0) + w_seg * (0.35 + 0.65 * t)
-                if joints_spec[p_idx]["chain"] == assigned_chain:
-                    bone_scores[p_idx] = bone_scores.get(p_idx, 0.0) + w_seg * (1.0 - t) * 0.5
-            else:
-                w_pt, _ = point_segment_weight(v, j_pos, j_pos, sigma=sigma)
-                bone_scores[j_idx] = bone_scores.get(j_idx, 0.0) + w_pt
-
-        # TailorRig rigconv.py dense_top4 normalization
-        ranked = sorted(bone_scores.items(), key=lambda kv: kv[1], reverse=True)[:4]
-        while len(ranked) < 4:
-            ranked.append((0, 0.0))
-        w_sum = sum(val for _, val in ranked)
-        if w_sum <= 1e-12:
-            ranked = [(cand_bones[0], 1.0), (0, 0.0), (0, 0.0), (0, 0.0)]
-            w_sum = 1.0
-        idxs = [int(k) for k, _ in ranked]
-        ws = [float(val / w_sum) for _, val in ranked]
-        # Ensure exact 1.0 sum
-        ws[0] += 1.0 - sum(ws)
-
-        joints0_bytes += struct.pack("<HHHH", *idxs)
-        weights0_bytes += struct.pack("<ffff", *ws)
+        bv_j = append_buffer_view(gltf, blob, bytes(joints0_bytes), target=34962)
+        bv_w = append_buffer_view(gltf, blob, bytes(weights0_bytes), target=34962)
+        acc_j = len(gltf["accessors"])
+        gltf["accessors"].append({
+            "bufferView": bv_j,
+            "componentType": 5123,  # UNSIGNED_SHORT
+            "count": V,
+            "type": "VEC4",
+        })
+        acc_w = len(gltf["accessors"])
+        gltf["accessors"].append({
+            "bufferView": bv_w,
+            "componentType": 5126,  # FLOAT
+            "count": V,
+            "type": "VEC4",
+        })
+        prim["attributes"]["JOINTS_0"] = acc_j
+        prim["attributes"]["WEIGHTS_0"] = acc_w
 
     # Inverse bind matrices (column-major 4x4 translation(-world_pos) since rest rotations are identity)
     ibm_bytes = bytearray()
     for j in joints_spec:
         gx, gy, gz = j["pos"]
-        # Column-major 4x4 matrix for T(-gx, -gy, -gz)
         ibm = [
             1.0, 0.0, 0.0, 0.0,
             0.0, 1.0, 0.0, 0.0,
@@ -205,25 +229,7 @@ def bind_tailorrig_skeleton(
         ]
         ibm_bytes += struct.pack("<16f", *ibm)
 
-    bv_j = append_buffer_view(gltf, blob, bytes(joints0_bytes), target=34962)
-    bv_w = append_buffer_view(gltf, blob, bytes(weights0_bytes), target=34962)
     bv_ibm = append_buffer_view(gltf, blob, bytes(ibm_bytes))
-
-    gltf.setdefault("accessors", [])
-    acc_j = len(gltf["accessors"])
-    gltf["accessors"].append({
-        "bufferView": bv_j,
-        "componentType": 5123,  # UNSIGNED_SHORT
-        "count": V,
-        "type": "VEC4",
-    })
-    acc_w = len(gltf["accessors"])
-    gltf["accessors"].append({
-        "bufferView": bv_w,
-        "componentType": 5126,  # FLOAT
-        "count": V,
-        "type": "VEC4",
-    })
     acc_ibm = len(gltf["accessors"])
     gltf["accessors"].append({
         "bufferView": bv_ibm,
@@ -232,14 +238,11 @@ def bind_tailorrig_skeleton(
         "type": "MAT4",
     })
 
-    prim["attributes"]["JOINTS_0"] = acc_j
-    prim["attributes"]["WEIGHTS_0"] = acc_w
-
-    # Fix PBR default metallicFactor=1.0 on TRELLIS material
-    for mat in gltf.get("materials", []):
-        pbr = mat.setdefault("pbrMetallicRoughness", {})
-        pbr["metallicFactor"] = 0.08
-        pbr["roughnessFactor"] = 0.42
+    if not preserve_materials:
+        for mat in gltf.get("materials", []):
+            pbr = mat.setdefault("pbrMetallicRoughness", {})
+            pbr["metallicFactor"] = 0.08
+            pbr["roughnessFactor"] = 0.42
 
     # Build glTF node hierarchy:
     # Armature container node -> SkinnedMesh node + Root Joint node -> child joint nodes
@@ -286,52 +289,70 @@ def bind_tailorrig_skeleton(
 
 
 def rig_fishing_rod():
-    src = TRELLIS_OUT / "fishing_rod" / "fishing_rod.glb"
+    """Normalize Poly Pizza Quaternius Red-Black Lure Rod (+Z butt, -Z tip, -Y reel) & bind 8-joint TailorRig skin."""
+    src = HF_DIR / "fishing_rod_quaternius.glb"
     gltf, blob = load_glb(src)
 
-    # Rotate raw rod (-X tip, +X butt, -Y reel) by -90° around Y right in bind pose so:
-    #   +Z = butt handle (+0.50), -Z = rod tip (-0.50), -Y = spinning reel hanging down!
-    prim = gltf["meshes"][0]["primitives"][0]
-    pts = read_vec3_accessor(gltf, blob, prim["attributes"]["POSITION"])
-    # R_y(-90°): (x, y, z) -> (-z, y, x) ... Wait: check (-1, 0, 0) [tip]:
-    # We want (-1, 0, 0) [tip] -> (0, 0, -1) [-Z forward!] and (+1, 0, 0) [butt] -> (0, 0, +1) [+Z toward angler!]
-    # Let's check: (x', y', z') = (-z, y, x) maps x=-0.5 -> z'=-0.5 (-Z tip!) and x=+0.5 -> z'=+0.5 (+Z butt!),
-    # determinant = (-1)*(1)*(0) ... wait: det([[0,0,-1],[0,1,0],[1,0,0]]) = +1 (proper rotation R_y(-90°))!
-    rot_pts = [[-p[2], p[1], p[0]] for p in pts]
-    write_vec3_accessor_in_place(gltf, blob, prim["attributes"]["POSITION"], rot_pts)
-    if "NORMAL" in prim["attributes"]:
-        nrms = read_vec3_accessor(gltf, blob, prim["attributes"]["NORMAL"])
-        rot_nrms = [[-n[2], n[1], n[0]] for n in nrms]
-        write_vec3_accessor_in_place(gltf, blob, prim["attributes"]["NORMAL"], rot_nrms)
+    prims = gltf["meshes"][0]["primitives"]
+    all_pts = []
+    for pr in prims:
+        all_pts.extend(read_vec3_accessor(gltf, blob, pr["attributes"]["POSITION"]))
+    z_min = min(p[2] for p in all_pts)
+    z_max = max(p[2] for p in all_pts)
+    z_span = max(z_max - z_min, 1e-6)
+    cz = (z_min + z_max) * 0.5
+    scale = 1.0 / z_span
+
+    # R_x(180°): (x, y, z) -> (x, -y, -z) maps handle -> +Z, tip -> -Z, reel/guides -> -Y, crank -> -X
+    for pr in prims:
+        pts = read_vec3_accessor(gltf, blob, pr["attributes"]["POSITION"])
+        rot_pts = [[p[0] * scale, -p[1] * scale, -(p[2] - cz) * scale] for p in pts]
+        write_vec3_accessor_in_place(gltf, blob, pr["attributes"]["POSITION"], rot_pts)
+        if "NORMAL" in pr["attributes"]:
+            nrms = read_vec3_accessor(gltf, blob, pr["attributes"]["NORMAL"])
+            rot_nrms = []
+            for n in nrms:
+                nx, ny, nz = n[0], -n[1], -n[2]
+                mag = math.sqrt(nx * nx + ny * ny + nz * nz) or 1.0
+                rot_nrms.append([nx / mag, ny / mag, nz / mag])
+            write_vec3_accessor_in_place(gltf, blob, pr["attributes"]["NORMAL"], rot_nrms)
 
     for mat in gltf.get("materials", []):
-        mat.setdefault("pbrMetallicRoughness", {})["metallicFactor"] = 0.28
-        mat["pbrMetallicRoughness"]["roughnessFactor"] = 0.36
+        name = (mat.get("name") or "").lower()
+        pbr = mat.setdefault("pbrMetallicRoughness", {})
+        if "black" in name:
+            pbr["baseColorFactor"] = [0.06, 0.065, 0.075, 1.0]
+            pbr["metallicFactor"] = 0.14
+            pbr["roughnessFactor"] = 0.54
+        else:
+            pbr["baseColorFactor"] = [0.56, 0.07, 0.055, 1.0]
+            pbr["metallicFactor"] = 0.48
+            pbr["roughnessFactor"] = 0.26
 
-    # TailorRig Primary Rod Chain + Auxiliary Spinning Reel Chain
+    # TailorRig Primary Rod Chain + Auxiliary Spinning Reel Chain matched to normalized landmarks
     joints = [
-        {"name": "rod_butt",     "parent": -1, "pos": (0.0, 0.0,  0.34), "chain": "rod_blank"},
-        {"name": "rod_grip",     "parent":  0, "pos": (0.0, 0.0,  0.16), "chain": "rod_blank"},
-        {"name": "rod_blank_01", "parent":  1, "pos": (0.0, 0.0,  0.00), "chain": "rod_blank"},
-        {"name": "rod_blank_02", "parent":  2, "pos": (0.0, 0.0, -0.17), "chain": "rod_blank"},
-        {"name": "rod_blank_03", "parent":  3, "pos": (0.0, 0.0, -0.34), "chain": "rod_blank"},
-        {"name": "rod_tip",      "parent":  4, "pos": (0.0, 0.005, -0.50), "chain": "rod_blank"},
+        {"name": "rod_butt",     "parent": -1, "pos": (0.0,   0.0,    0.46), "chain": "rod_blank"},
+        {"name": "rod_grip",     "parent":  0, "pos": (0.0,   0.0,    0.34), "chain": "rod_blank"},
+        {"name": "rod_blank_01", "parent":  1, "pos": (0.0,   0.0,    0.14), "chain": "rod_blank"},
+        {"name": "rod_blank_02", "parent":  2, "pos": (0.0,   0.0,   -0.08), "chain": "rod_blank"},
+        {"name": "rod_blank_03", "parent":  3, "pos": (0.0,   0.0,   -0.30), "chain": "rod_blank"},
+        {"name": "rod_tip",      "parent":  4, "pos": (0.0,  -0.01,  -0.50), "chain": "rod_blank"},
         # Auxiliary Reel Chain (isolated from blank bending!)
-        {"name": "reel_body",    "parent":  1, "pos": (0.0, -0.048, 0.21), "chain": "reel_aux"},
-        {"name": "reel_crank",   "parent":  6, "pos": (-0.032, -0.062, 0.21), "chain": "reel_aux"},
+        {"name": "reel_body",    "parent":  1, "pos": (0.0,  -0.036,  0.28), "chain": "reel_aux"},
+        {"name": "reel_crank",   "parent":  6, "pos": (-0.042, -0.040, 0.28), "chain": "reel_aux"},
     ]
 
     def classify_rod_vertex(v):
         x, y, z = v
-        # Hanging spinning reel sits below shaft (y < -0.022) around z in [0.06, 0.36]
-        if y < -0.022 and 0.05 <= z <= 0.37:
+        # Hanging spinning reel sits below shaft (y < -0.014) around z in [0.17, 0.42]
+        if y < -0.014 and 0.17 <= z <= 0.42:
             return "reel_aux"
         return "rod_blank"
 
-    bind_tailorrig_skeleton(gltf, blob, joints, classify_rod_vertex, sigma=0.095)
+    bind_tailorrig_skeleton(gltf, blob, joints, classify_rod_vertex, sigma=0.095, preserve_materials=True)
     out = TRIG_OUT / "fishing_rod_tailorrig.glb"
     save_glb(out, gltf, blob)
-    print(f"Created TailorRig rod: {out.name} ({len(joints)} joints, 2 chains)")
+    print(f"Created TailorRig rod (Quaternius): {out.name} ({len(joints)} joints, 2 chains, {len(prims)} prims)")
 
 
 def rig_fish(species_id: str, rotate_x_neg_to_z_pos: bool):

@@ -242,18 +242,18 @@ function buildPierAsset(pierScene) {
 
 /**
  * TailorRig Skinned Fishing Rod Controller (`fishing_rod_tailorrig.glb`):
- *   - Primary Chain: `rod_butt` (+0.34 Z) -> `rod_grip` (+0.16 Z) -> `rod_blank_01..03` -> `rod_tip` (-0.50 Z)
+ *   - Primary Chain: `rod_butt` (+0.46 Z) -> `rod_grip` (+0.34 Z) -> `rod_blank_01..03` -> `rod_tip` (-0.50 Z)
  *   - Auxiliary Chain: `reel_body` -> `reel_crank` (isolated from rod blank flex!)
  */
-function buildTailorRigRodController(rodScene, rodScale = 1.68) {
+function buildTailorRigRodController(rodScene, rodScale = 2.05) {
   const root = new THREE.Group();
   const model = SkeletonUtils.clone(rodScene);
   model.traverse((c) => {
     if (c.isMesh) c.frustumCulled = false;
   });
 
-  // Shift so `rod_grip` (z = +0.16) sits near local origin of `root`
-  model.position.set(0, 0, -0.18);
+  // Shift so `rod_grip` (z = +0.34) sits at local origin of `root`
+  model.position.set(0, 0, -0.34);
   root.add(model);
   root.scale.setScalar(rodScale);
 
@@ -262,17 +262,17 @@ function buildTailorRigRodController(rodScene, rodScale = 1.68) {
     if (b.isBone || b.name) bones[b.name] = b;
   });
 
-  // Locator node right on the cork grip (for Right Hand IK) and butt/reel crank (for Left Hand IK)
+  // Locator nodes on handle grip (Right Hand IK), butt cap & spinning reel crank (Left Hand IK)
   const rightGripAnchor = new THREE.Object3D();
-  rightGripAnchor.position.set(0.0, 0.005, 0.02);
+  rightGripAnchor.position.set(0.0, 0.004, 0.00);
   if (bones.rod_grip) bones.rod_grip.add(rightGripAnchor);
 
   const leftButtAnchor = new THREE.Object3D();
-  leftButtAnchor.position.set(0.0, -0.005, 0.14);
+  leftButtAnchor.position.set(0.0, -0.004, 0.01);
   if (bones.rod_butt) bones.rod_butt.add(leftButtAnchor);
 
   const reelCrankOrbit = new THREE.Object3D();
-  reelCrankOrbit.position.set(-0.042, -0.014, 0.028);
+  reelCrankOrbit.position.set(-0.042, -0.008, 0.0);
   if (bones.reel_body) bones.reel_body.add(reelCrankOrbit);
 
   let crankAngle = 0;
@@ -298,8 +298,8 @@ function buildTailorRigRodController(rodScene, rodScale = 1.68) {
       }
       reelCrankOrbit.position.set(
         -0.042,
-        -0.014 + Math.sin(crankAngle) * 0.028,
-        Math.cos(crankAngle) * 0.028
+        -0.008 + Math.sin(crankAngle) * 0.022,
+        Math.cos(crankAngle) * 0.022
       );
     },
     getTipWorldPosition(outVec) {
@@ -897,9 +897,9 @@ function buildRemoteAnglerActor(charScene, rodScene, bobberScene, opts = {}) {
   }
 
   // Attach TailorRig fishing rod in front of torso/chest (`facing -Z`)
-  const rodCtrl = buildTailorRigRodController(rodScene, 1.28);
+  const rodCtrl = buildTailorRigRodController(rodScene, 1.55);
   const leftHandleAnchor = new THREE.Object3D();
-  leftHandleAnchor.position.set(0.0, -0.01, 0.11);
+  leftHandleAnchor.position.set(0.0, -0.008, 0.12);
   rodCtrl.group.add(leftHandleAnchor);
 
   const rodPivot = new THREE.Group();
