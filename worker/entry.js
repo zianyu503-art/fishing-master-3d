@@ -254,6 +254,7 @@ function sanitizeRoomState(raw, fallback = {}) {
     yaw: Math.round(num(raw?.yaw, fallback.yaw ?? 0, -3.5, 3.5) * 1000) / 1000,
     state: st,
     rodBend: Math.round(num(raw?.rodBend, fallback.rodBend ?? 0, 0, 1.2) * 1000) / 1000,
+    rodId: String(raw?.rodId || fallback.rodId || "lure_red").replace(/[^a-z0-9_]/g, "").slice(0, 24) || "lure_red",
     bobber,
     env: String(raw?.env || fallback.env || "lakeside").replace(/[^a-z]/g, "").slice(0, 16),
     updatedAt: Date.now(),
@@ -314,6 +315,7 @@ export class FishingRoom extends DurableObject {
       z: url.searchParams.get("z"),
       yaw: url.searchParams.get("yaw"),
       state: "IDLE",
+      rodId: url.searchParams.get("rodId"),
       env: url.searchParams.get("env"),
     });
 

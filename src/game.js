@@ -603,15 +603,153 @@ const RODS = [
   {
     id: "lure_red",
     name: "紅黑路亞釣竿",
+    icon: "",
+    tierColor: "#f8fafc",
+    statSummary: "均衡基礎數值 · 全水域適用",
     isExamRod: false,
     cost: 0,
+    castMult: 1.0,
+    tensionMult: 1.0,
+    reelMult: 1.0,
+    staminaMult: 1.0,
+    goldMult: 1.0,
+    luckWeightPow: 1.0,
+    shockCd: 2.2,
+    shockPowerMult: 1.0,
+    bossBonus: 1.0,
     desc: "經典 Quaternius 紅黑輕量化碳纖路亞竿，手感平衡穩健，適合全魚種入門與進階實戰。",
+  },
+  {
+    id: "bamboo_classic",
+    name: "🎋 翡翠竹韻手竿",
+    icon: "🎋",
+    tierColor: "#a3e635",
+    statSummary: "遠投 +6% · 張力 -10% · 金幣 +15%",
+    isExamRod: false,
+    cost: 600,
+    castMult: 1.06,
+    tensionMult: 0.90,
+    reelMult: 1.08,
+    staminaMult: 1.08,
+    goldMult: 1.15,
+    luckWeightPow: 0.96,
+    shockCd: 2.0,
+    shockPowerMult: 1.05,
+    bossBonus: 1.0,
+    desc: "復古精雕實木竹韻手竿搭配黃銅導環，柔韌卸力極佳，讓新手也能輕鬆拉起大魚並多賺金幣！",
+  },
+  {
+    id: "carbon_sport",
+    name: "⚡ 鈦合金競速竿",
+    icon: "⚡",
+    tierColor: "#38bdf8",
+    statSummary: "遠投 +18% · 張力 -14% · 收線 +18% · 金幣 +20%",
+    isExamRod: false,
+    cost: 1800,
+    castMult: 1.18,
+    tensionMult: 0.86,
+    reelMult: 1.18,
+    staminaMult: 1.16,
+    goldMult: 1.20,
+    luckWeightPow: 0.92,
+    shockCd: 1.85,
+    shockPowerMult: 1.15,
+    bossBonus: 1.08,
+    desc: "流線型運動碳纖海藍竿身與競速紡車輪，投擲距離大幅躍升，專攻深水外洋魚群。",
+  },
+  {
+    id: "jade_dragon",
+    name: "🐉 碧玉蒼龍寶竿",
+    icon: "🐉",
+    tierColor: "#34d399",
+    statSummary: "張力 -20% · 消體 +28% · 大魚運↑ · 金幣 +35%",
+    isExamRod: false,
+    cost: 4500,
+    castMult: 1.24,
+    tensionMult: 0.80,
+    reelMult: 1.24,
+    staminaMult: 1.28,
+    goldMult: 1.35,
+    luckWeightPow: 0.84,
+    shockCd: 1.7,
+    shockPowerMult: 1.20,
+    bossBonus: 1.18,
+    desc: "翠綠龍紋竿身鑲嵌尊爵金飾卷線器，自帶招財魚王氣運，更容易釣破紀錄大物！",
+  },
+  {
+    id: "thunder_harpoon",
+    name: "🌩️ 高壓雷霆電擊竿",
+    icon: "🌩️",
+    tierColor: "#22d3ee",
+    statSummary: "電擊冷卻 1.0s · 電擊威力 +55% · 張力 -22% · 金幣 +40%",
+    isExamRod: false,
+    cost: 9500,
+    castMult: 1.28,
+    tensionMult: 0.78,
+    reelMult: 1.30,
+    staminaMult: 1.35,
+    goldMult: 1.40,
+    luckWeightPow: 0.82,
+    shockCd: 1.0,
+    shockPowerMult: 1.55,
+    bossBonus: 1.25,
+    desc: "冰藍超導放電競速竿！電擊冷卻減半、電擊麻痺傷害暴增，獵殺電鰻與巨鯊首選利器！",
+  },
+  {
+    id: "volcanic_titan",
+    name: "🔥 熔岩巨獸狩獵竿",
+    icon: "🔥",
+    tierColor: "#fb923c",
+    statSummary: "張力 -32% · 收線 +38% · 消體 +50% · 巨獸咬率 +35% · 金幣 +55%",
+    isExamRod: false,
+    cost: 22000,
+    castMult: 1.35,
+    tensionMult: 0.68,
+    reelMult: 1.38,
+    staminaMult: 1.50,
+    goldMult: 1.55,
+    luckWeightPow: 0.76,
+    shockCd: 1.3,
+    shockPowerMult: 1.45,
+    bossBonus: 1.35,
+    desc: "鍛造赤焰熔岩紋重裝大物路亞竿！極致抗拉與高速絞輪，專門迎戰鯨鯊、狂暴大白鯊與遠古巨齒鯊！",
+  },
+  {
+    id: "abyssal_void",
+    name: "🌌 深淵星海神話竿",
+    icon: "🌌",
+    tierColor: "#c084fc",
+    statSummary: "張力 -38% · 收線 +45% · 稀珍/巨獸 +50% · 金幣 +85%",
+    isExamRod: false,
+    cost: 48000,
+    castMult: 1.42,
+    tensionMult: 0.62,
+    reelMult: 1.45,
+    staminaMult: 1.65,
+    goldMult: 1.85,
+    luckWeightPow: 0.70,
+    shockCd: 0.9,
+    shockPowerMult: 1.75,
+    bossBonus: 1.50,
+    desc: "散發深邃紫羅蘭星光的頂級深淵神竿，全性能稱霸湖海，令皇帶魚與神話巨鯊無從逃脫！",
   },
   {
     id: "exam_rod",
     name: "🎓 考試釣竿",
+    icon: "🎓",
+    tierColor: "#fbbf24",
+    statSummary: "紅字 1～100分魚身評級 · 滿分 2.4x 巨賞 · 全能滿級控線",
     isExamRod: true,
     cost: 100000,
+    castMult: 1.45,
+    tensionMult: 0.65,
+    reelMult: 1.45,
+    staminaMult: 1.60,
+    goldMult: 1.15,
+    luckWeightPow: 0.68,
+    shockCd: 0.9,
+    shockPowerMult: 1.70,
+    bossBonus: 1.45,
     desc: "極其昂貴的傳奇黃金評分神竿！釣起的每一種魚都會用紅字直接寫在魚身上標記 1～100 分，分數越高魚體變得越龐大、賞金暴增且綻放尊榮金光！",
   },
 ];
@@ -1432,8 +1570,13 @@ export class FishingMasterGame {
     }
   }
 
+  _getActiveRod() {
+    return RODS.find((r) => r.id === this.activeRodId) || RODS[0];
+  }
+
   _computeLandingPoint(power) {
-    const dist = 7.5 + power * 23.5;
+    const rod = this._getActiveRod();
+    const dist = Math.min(40, 7.5 + power * 23.5 * (rod.castMult || 1.0));
     const forward = new THREE.Vector3(0, 0, -1).applyAxisAngle(new THREE.Vector3(0, 1, 0), this.yaw);
     return new THREE.Vector3(
       this.playerPos.x + forward.x * dist,
@@ -1473,11 +1616,13 @@ export class FishingMasterGame {
       "pacific_sailfish", "ocean_sunfish", "coelacanth", "oarfish",
     ]);
     const apexSpecies = new Set(["hammerhead_shark", "goblin_shark", "whale_shark", "great_white_shark", "megalodon"]);
+    const rod = this._getActiveRod();
+    const rodBossMult = rod.bossBonus || 1.0;
     const weights = SPECIES_DB.map((sp) => {
       let w = sp.spawnWeight * (bait.bonuses?.[sp.id] || 1.0);
       if (midDeepSpecies.has(sp.id) && this.fishDist > 14) w *= 1.3;
-      if (deepPoolSpecies.has(sp.id)) w *= deepBonus;
-      if (apexSpecies.has(sp.id)) w *= this.fishDist > 18 ? 1.75 : 0.75;
+      if (deepPoolSpecies.has(sp.id)) w *= deepBonus * (1 + (rodBossMult - 1) * 0.5);
+      if (apexSpecies.has(sp.id)) w *= (this.fishDist > 18 ? 1.75 : 0.75) * rodBossMult;
       return w;
     });
     const sum = weights.reduce((a, b) => a + b, 0);
@@ -1559,8 +1704,9 @@ export class FishingMasterGame {
 
     if (this.state !== "FIGHTING" || !this.activeCatch || this.shockCooldown > 0) return;
     const sp = this.activeCatch.species;
+    const rod = this._getActiveRod();
     const isEel = sp.id === "electric_eel";
-    this.shockCooldown = 2.2;
+    this.shockCooldown = rod.shockCd || 2.2;
     this.lightningTimer = 0.30;
 
     this.audio.playElectricZap(0.95);
@@ -1576,15 +1722,18 @@ export class FishingMasterGame {
     this._spawnSplashBurst(this.bobberRig.position.x, this.bobberRig.position.z, 18, 1.1);
     this._spawnRipple(this.bobberRig.position.x, this.bobberRig.position.z, 3.6);
 
+    const shockMult = rod.shockPowerMult || 1.0;
+    const stamHit = Math.round((isEel ? 22 : 14) * shockMult);
+    const tensDrop = Math.round((isEel ? 15 : 10) * shockMult);
     if (isEel) {
-      this.stamina = Math.max(0, this.stamina - 22);
+      this.stamina = Math.max(0, this.stamina - stamHit);
       this.fishStruggling = false;
-      this.tension = Math.max(10, this.tension - 15);
+      this.tension = Math.max(10, this.tension - tensDrop);
       this._showToast("⚡ 電擊壓制了電鰻高壓放電！");
     } else {
-      this.stamina = Math.max(0, this.stamina - 14);
+      this.stamina = Math.max(0, this.stamina - stamHit);
       this.fishStruggling = false;
-      this.tension = Math.max(8, this.tension - 10);
+      this.tension = Math.max(8, this.tension - tensDrop);
       this._showToast("⚡ 電擊麻痺目標！趁現在收線！");
     }
   }
@@ -1678,7 +1827,8 @@ export class FishingMasterGame {
     this.ui.combatPanel.classList.add("is-visible");
 
     const species = this.pendingSpecies || this._pickTargetFishSpecies();
-    const isExamRod = this.activeRodId === "exam_rod";
+    const rod = this._getActiveRod();
+    const isExamRod = Boolean(rod.isExamRod);
     let examScore = null;
     let sizeNorm;
     let weightKg;
@@ -1694,7 +1844,7 @@ export class FishingMasterGame {
       ).toFixed(2);
       examScaleBoost = 0.72 + scoreNorm * 0.88;
     } else {
-      const u = Math.pow(Math.random(), species.weightPower);
+      const u = Math.pow(Math.random(), species.weightPower * (rod.luckWeightPow || 1.0));
       weightKg = +(species.minKg + u * (species.maxKg - species.minKg)).toFixed(2);
       sizeNorm = (weightKg - species.minKg) / (species.maxKg - species.minKg);
     }
@@ -1781,11 +1931,14 @@ export class FishingMasterGame {
       rankBonus = 1.3;
     }
 
+    const rod = this._getActiveRod();
     const grade = examScore != null ? this._getExamGradeInfo(examScore) : null;
     const examGoldMult = grade ? grade.goldMult : 1.0;
     const examXpMult = grade ? Math.max(1.0, grade.goldMult * 0.85) : 1.0;
     const killBonus = electrocuted && species.isBoss ? 1.25 : 1.0;
-    const earnedGold = Math.round(species.baseGold * (0.75 + sizeNorm * 0.85) * rankBonus * killBonus * examGoldMult);
+    const earnedGold = Math.round(
+      species.baseGold * (0.75 + sizeNorm * 0.85) * rankBonus * killBonus * examGoldMult * (rod.goldMult || 1.0)
+    );
     const earnedXp = Math.round(species.xp * rankBonus * killBonus * examXpMult);
     this.coins += earnedGold;
     this.xp += earnedXp;
@@ -1943,7 +2096,8 @@ export class FishingMasterGame {
     }
     this.ui.xpFill.style.width = `${Math.round(progress * 100)}%`;
     const bait = BAITS.find((b) => b.id === this.activeBaitId) || BAITS[0];
-    this.ui.baitName.textContent = this.activeRodId === "exam_rod" ? `🎓 ${bait.name}` : bait.name;
+    const rod = this._getActiveRod();
+    this.ui.baitName.textContent = rod.icon ? `${rod.icon} ${bait.name}` : bait.name;
   }
 
   _openCompendiumDrawer() {
@@ -2203,8 +2357,9 @@ export class FishingMasterGame {
             return `
               <div class="drawer-item">
                 <div>
-                  <div style="font-size:16px;font-weight:700;color:${r.isExamRod ? "#fbbf24" : "#f8fafc"};">${r.name} ${equipped ? '<span style="color:#34d399;font-size:12px;">[使用中]</span>' : ""}</div>
-                  <div style="font-size:13px;color:#cbd5e1;margin-top:3px;">${r.desc}</div>
+                  <div style="font-size:16px;font-weight:700;color:${r.tierColor || "#f8fafc"};">${r.name} ${equipped ? '<span style="color:#34d399;font-size:12px;">[使用中]</span>' : ""}</div>
+                  ${r.statSummary ? `<div style="display:inline-block;margin-top:4px;padding:2px 8px;border-radius:999px;font-size:11.5px;font-weight:700;background:rgba(15,23,42,0.7);border:1px solid ${r.tierColor || "rgba(148,163,184,0.3)"};color:${r.tierColor || "#cbd5e1"};">${r.statSummary}</div>` : ""}
+                  <div style="font-size:13px;color:#cbd5e1;margin-top:4px;">${r.desc}</div>
                 </div>
                 <div>
                   <button class="action-chip" data-rod="${r.id}">
@@ -2269,7 +2424,11 @@ export class FishingMasterGame {
           }
           this.coins -= rod.cost;
           this.unlockedRods.add(id);
-          this._showToast(`🎉 已購得 ${rod.name}！釣到的魚皆會獲得 1～100 分評級！`);
+          this._showToast(
+            rod.isExamRod
+              ? `🎉 已購得 ${rod.name}！釣到的魚皆會獲得 1～100 分紅字評級！`
+              : `🎉 已購得並裝備 ${rod.name}！`
+          );
         } else {
           this._showToast(`已裝備 ${rod.name}`);
         }
@@ -2277,6 +2436,7 @@ export class FishingMasterGame {
         if (this.rodCtrl?.setRodStyle) this.rodCtrl.setRodStyle(id);
         this._saveProgress();
         this._refreshTopHUD();
+        this._sendStateIfDue(true);
         this._openBaitDrawer("rod");
       };
     });
@@ -2312,6 +2472,7 @@ export class FishingMasterGame {
       x: this.playerPos.x.toFixed(2),
       z: this.playerPos.z.toFixed(2),
       yaw: this.yaw.toFixed(2),
+      rodId: this.activeRodId,
       env: ENV_ORDER[this.envIndex] || "lakeside",
     });
     return `${wsOrigin}/ws/room/${encodeURIComponent(this.mpRoomId)}?${qs.toString()}`;
@@ -2544,6 +2705,7 @@ export class FishingMasterGame {
       yaw: Math.round(this.yaw * 1000) / 1000,
       state: this.state,
       rodBend: Math.round((this._smoothBendY || 0) * 100) / 100,
+      rodId: this.activeRodId,
       bobber,
       env: ENV_ORDER[this.envIndex] || "lakeside",
     };
@@ -2567,7 +2729,7 @@ export class FishingMasterGame {
     const now = performance.now();
     if (!force && now - this.mpLastStateSentAt < 100) return;
     const st = this._buildLocalNetState();
-    const sig = `${st.x}|${st.z}|${st.yaw}|${st.state}|${st.rodBend}|${st.name}|${st.bobber?.x ?? ""}|${st.bobber?.z ?? ""}`;
+    const sig = `${st.x}|${st.z}|${st.yaw}|${st.state}|${st.rodBend}|${st.rodId}|${st.name}|${st.bobber?.x ?? ""}|${st.bobber?.z ?? ""}`;
     if (!force && sig === this.mpLastSentSig && now - this.mpLastStateSentAt < 1200) return;
     this.mpLastSentSig = sig;
     this.mpLastStateSentAt = now;
@@ -2616,6 +2778,7 @@ export class FishingMasterGame {
         x: pData.x,
         z: pData.z,
         yaw: pData.yaw,
+        rodId: pData.rodId,
         accentColor: accent,
         tintColor: accent,
       });
@@ -3116,13 +3279,15 @@ export class FishingMasterGame {
         }
       }
 
+      const rod = this._getActiveRod();
+      const maxRetreat = Math.max(34, 34 * (rod.castMult || 1.0));
       if (this.isPressingAction) {
         const eelBonusTension = isEel && this.eelShockActive ? 26.0 : 0;
-        const tensionRise = (this.fishStruggling ? 52.0 : 24.0) * sp.fightStrength + eelBonusTension;
+        const tensionRise = ((this.fishStruggling ? 52.0 : 24.0) * sp.fightStrength * (rod.tensionMult || 1.0)) + eelBonusTension;
         this.tension += tensionRise * dt;
-        const pullSpeed = sp.reelSpeed * (this.fishStruggling ? 0.52 : 1.18);
+        const pullSpeed = sp.reelSpeed * (rod.reelMult || 1.0) * (this.fishStruggling ? 0.52 : 1.18);
         this.fishDist = Math.max(isShark ? 2.1 : 0.8, this.fishDist - pullSpeed * dt);
-        this.stamina = Math.max(0, this.stamina - sp.staminaDrainRate * dt);
+        this.stamina = Math.max(0, this.stamina - sp.staminaDrainRate * (rod.staminaMult || 1.0) * dt);
         this.audio.tickReel(this.tension / 100);
         if (this.rodCtrl) this.rodCtrl.spinReel(dt, 14.0);
         if (isEel && this.eelShockActive && Math.random() < dt * 3.5) {
@@ -3131,7 +3296,7 @@ export class FishingMasterGame {
       } else {
         this.tension = Math.max(8, this.tension - 28.0 * dt);
         if (this.fishStruggling && this.stamina > 15) {
-          this.fishDist = Math.min(34, this.fishDist + 1.35 * sp.fightStrength * dt);
+          this.fishDist = Math.min(maxRetreat, this.fishDist + 1.35 * sp.fightStrength * dt);
         }
         this.stamina = Math.max(0, this.stamina - 3.5 * dt);
       }

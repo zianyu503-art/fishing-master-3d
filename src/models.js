@@ -98,6 +98,8 @@ export async function loadAllFishingAssets(onProgress) {
     ["armsRigged", "outputs/tailorrig/angler_arms_tailorrig.glb", "gltf"],
     ["anglerCharacter", "outputs/hf_assets/angler_character.glb", "gltf"],
     ["rodRigged", "outputs/tailorrig/fishing_rod_tailorrig.glb", "gltf"],
+    ["rodWoodRigged", "outputs/tailorrig/fishing_rod_wood_tailorrig.glb", "gltf"],
+    ["rodSportRigged", "outputs/tailorrig/fishing_rod_sport_tailorrig.glb", "gltf"],
     ["bassRigged", "outputs/tailorrig/largemouth_bass_tailorrig.glb", "gltf"],
     ["carpRigged", "outputs/tailorrig/common_carp_tailorrig.glb", "gltf"],
     ["pikeRigged", "outputs/tailorrig/northern_pike_tailorrig.glb", "gltf"],
@@ -163,9 +165,19 @@ export async function loadAllFishingAssets(onProgress) {
     boatTemplate: buildGroundedProp(raw.hfBoat, 4.6),
     cliffTemplate: buildGroundedProp(raw.hfCliff, 14.0),
     reedsTemplate: buildGroundedProp(raw.hfReeds, 2.2),
-    rodController: buildTailorRigRodController(raw.rodRigged),
+    rodController: buildTailorRigRodController({
+      pro: raw.rodRigged,
+      wood: raw.rodWoodRigged,
+      sport: raw.rodSportRigged,
+    }),
     armsController: buildTailorRigArmsController(raw.armsRigged),
-    createRemoteAnglerActor: (opts) => buildRemoteAnglerActor(raw.anglerCharacter, raw.rodRigged, raw.bobber, opts),
+    createRemoteAnglerActor: (opts) =>
+      buildRemoteAnglerActor(
+        raw.anglerCharacter,
+        { pro: raw.rodRigged, wood: raw.rodWoodRigged, sport: raw.rodSportRigged },
+        raw.bobber,
+        opts
+      ),
     bobberTemplate: buildCleanBobber(raw.bobber),
     wormTemplate: buildCenteredProp(raw.worm, 0.16),
     coinTemplate: buildCenteredProp(raw.coin, 0.44),
@@ -264,93 +276,147 @@ function buildPierAsset(pierScene) {
   return group;
 }
 
+const ROD_VISUAL_STYLES = {
+  lure_red: {
+    variant: "pro",
+    blank: { color: 0x8f120e, emissive: 0x000000, metalness: 0.48, roughness: 0.26 },
+    trim: { color: 0x111318, emissive: 0x000000, metalness: 0.14, roughness: 0.54 },
+  },
+  bamboo_classic: {
+    variant: "wood",
+    blank: { color: 0xc48f47, emissive: 0x000000, metalness: 0.10, roughness: 0.46 },
+    trim: { color: 0xa17a38, emissive: 0x000000, metalness: 0.68, roughness: 0.28 },
+  },
+  carbon_sport: {
+    variant: "sport",
+    blank: { color: 0x38bdf8, emissive: 0x072a40, metalness: 0.65, roughness: 0.22 },
+    trim: { color: 0x1e293b, emissive: 0x000000, metalness: 0.18, roughness: 0.50 },
+  },
+  jade_dragon: {
+    variant: "wood",
+    blank: { color: 0x10b981, emissive: 0x064e3b, metalness: 0.38, roughness: 0.22 },
+    trim: { color: 0xeab308, emissive: 0x332100, metalness: 0.78, roughness: 0.22 },
+  },
+  thunder_harpoon: {
+    variant: "sport",
+    blank: { color: 0x22d3ee, emissive: 0x0b4f6c, metalness: 0.72, roughness: 0.18 },
+    trim: { color: 0x0f172a, emissive: 0x082f49, metalness: 0.25, roughness: 0.44 },
+  },
+  volcanic_titan: {
+    variant: "pro",
+    blank: { color: 0xf97316, emissive: 0x5a1800, metalness: 0.60, roughness: 0.22 },
+    trim: { color: 0x1c1917, emissive: 0x260900, metalness: 0.22, roughness: 0.48 },
+  },
+  abyssal_void: {
+    variant: "sport",
+    blank: { color: 0xa855f7, emissive: 0x3b0764, metalness: 0.76, roughness: 0.16 },
+    trim: { color: 0x1e1b4b, emissive: 0x1e1044, metalness: 0.34, roughness: 0.38 },
+  },
+  exam_rod: {
+    variant: "pro",
+    blank: { color: 0xfbbf24, emissive: 0x3b2400, metalness: 0.72, roughness: 0.20 },
+    trim: { color: 0x1e293b, emissive: 0x000000, metalness: 0.20, roughness: 0.48 },
+  },
+};
+
 /**
- * TailorRig Skinned Fishing Rod Controller (`fishing_rod_tailorrig.glb`):
+ * Multi-Mesh TailorRig Skinned Fishing Rod Controller (`pro`, `wood`, `sport` Quaternius silhouettes):
  *   - Primary Chain: `rod_butt` (+0.46 Z) -> `rod_grip` (+0.34 Z) -> `rod_blank_01..03` -> `rod_tip` (-0.50 Z)
  *   - Auxiliary Chain: `reel_body` -> `reel_crank` (isolated from rod blank flex!)
  */
-function buildTailorRigRodController(rodScene, rodScale = 2.05) {
+function buildTailorRigRodController(rodScenes, rodScale = 2.05) {
   const root = new THREE.Group();
-  const model = SkeletonUtils.clone(rodScene);
-  const blackMats = [];
-  const accentMats = [];
-  model.traverse((c) => {
-    if (c.isMesh) {
-      c.frustumCulled = false;
-      if (c.material) {
-        const cloned = Array.isArray(c.material) ? c.material.map((m) => m.clone()) : c.material.clone();
-        c.material = cloned;
-        const list = Array.isArray(cloned) ? cloned : [cloned];
-        for (const m of list) {
-          if (/black/i.test(m.name || "")) blackMats.push(m);
-          else accentMats.push(m);
-        }
-      }
-    }
-  });
-
-  // Shift so `rod_grip` (z = +0.34) sits at local origin of `root`
-  model.position.set(0, 0, -0.34);
-  root.add(model);
   root.scale.setScalar(rodScale);
 
-  const bones = {};
-  model.traverse((b) => {
-    if (b.isBone || b.name) bones[b.name] = b;
-  });
+  const sceneMap = rodScenes?.isObject3D ? { pro: rodScenes } : (rodScenes || {});
+  const variants = {};
 
-  // Offset wrist anchor slightly back & right so PALM & CURLED FINGERS wrap squarely around the black handle
-  const rightGripAnchor = new THREE.Object3D();
-  rightGripAnchor.position.set(0.016, -0.014, 0.044);
-  if (bones.rod_grip) bones.rod_grip.add(rightGripAnchor);
+  for (const [key, sceneObj] of Object.entries(sceneMap)) {
+    if (!sceneObj) continue;
+    const model = SkeletonUtils.clone(sceneObj);
+    const blankMats = [];
+    const trimMats = [];
+    model.traverse((c) => {
+      if (c.isMesh) {
+        c.frustumCulled = false;
+        if (c.material) {
+          const cloned = Array.isArray(c.material) ? c.material.map((m) => m.clone()) : c.material.clone();
+          c.material = cloned;
+          const list = Array.isArray(cloned) ? cloned : [cloned];
+          for (const m of list) {
+            const isTrim = key === "wood" ? /metal/i.test(m.name || "") : /black/i.test(m.name || "");
+            if (isTrim) trimMats.push(m);
+            else blankMats.push(m);
+          }
+        }
+      }
+    });
 
-  const leftButtAnchor = new THREE.Object3D();
-  leftButtAnchor.position.set(0.0, -0.004, 0.01);
-  if (bones.rod_butt) bones.rod_butt.add(leftButtAnchor);
+    // Shift so `rod_grip` (z = +0.34) sits at local origin of `root`
+    model.position.set(0, 0, -0.34);
+    model.visible = false;
+    root.add(model);
 
-  const reelCrankOrbit = new THREE.Object3D();
-  reelCrankOrbit.position.set(-0.042, -0.008, 0.0);
-  if (bones.reel_body) bones.reel_body.add(reelCrankOrbit);
+    const bones = {};
+    model.traverse((b) => {
+      if (b.isBone || b.name) bones[b.name] = b;
+    });
 
+    const rightGripAnchor = new THREE.Object3D();
+    rightGripAnchor.position.set(0.016, -0.014, 0.044);
+    if (bones.rod_grip) bones.rod_grip.add(rightGripAnchor);
+
+    const leftButtAnchor = new THREE.Object3D();
+    leftButtAnchor.position.set(0.0, -0.004, 0.01);
+    if (bones.rod_butt) bones.rod_butt.add(leftButtAnchor);
+
+    const reelCrankOrbit = new THREE.Object3D();
+    reelCrankOrbit.position.set(-0.042, -0.008, 0.0);
+    if (bones.reel_body) bones.reel_body.add(reelCrankOrbit);
+
+    variants[key] = { model, bones, blankMats, trimMats, rightGripAnchor, leftButtAnchor, reelCrankOrbit };
+  }
+
+  let activeKey = variants.pro ? "pro" : Object.keys(variants)[0];
   let crankAngle = 0;
+  let lastBendDown = 0;
+  let lastBendSide = 0;
 
-  return {
+  const getActive = () => variants[activeKey] || Object.values(variants)[0];
+
+  const applyMatSpec = (mats, spec) => {
+    for (const m of mats) {
+      m.color.setHex(spec.color);
+      if ("emissive" in m) m.emissive.setHex(spec.emissive ?? 0x000000);
+      if ("metalness" in m) m.metalness = spec.metalness;
+      if ("roughness" in m) m.roughness = spec.roughness;
+      m.needsUpdate = true;
+    }
+  };
+
+  const controller = {
     group: root,
-    bones,
+    get bones() {
+      return getActive().bones;
+    },
     setRodStyle(rodId = "lure_red") {
-      const isExam = rodId === "exam_rod";
-      for (const m of accentMats) {
-        if (isExam) {
-          m.color.setHex(0xfbbf24);
-          if ("emissive" in m) m.emissive.setHex(0x3b2400);
-          if ("metalness" in m) m.metalness = 0.72;
-          if ("roughness" in m) m.roughness = 0.20;
-        } else {
-          m.color.setHex(0x8f120e);
-          if ("emissive" in m) m.emissive.setHex(0x000000);
-          if ("metalness" in m) m.metalness = 0.48;
-          if ("roughness" in m) m.roughness = 0.26;
-        }
-        m.needsUpdate = true;
+      const style = ROD_VISUAL_STYLES[rodId] || ROD_VISUAL_STYLES.lure_red;
+      activeKey = variants[style.variant] ? style.variant : (variants.pro ? "pro" : Object.keys(variants)[0]);
+      for (const [k, v] of Object.entries(variants)) {
+        v.model.visible = k === activeKey;
       }
-      for (const m of blackMats) {
-        if (isExam) {
-          m.color.setHex(0x1e293b);
-          if ("metalness" in m) m.metalness = 0.20;
-          if ("roughness" in m) m.roughness = 0.48;
-        } else {
-          m.color.setHex(0x111318);
-          if ("metalness" in m) m.metalness = 0.14;
-          if ("roughness" in m) m.roughness = 0.54;
-        }
-        m.needsUpdate = true;
-      }
+      const act = getActive();
+      applyMatSpec(act.blankMats, style.blank);
+      applyMatSpec(act.trimMats, style.trim);
+      controller.setBend(lastBendDown, lastBendSide);
     },
     setBend(downwardBend, sideBend = 0) {
-      // Distribute smooth parabolic skeletal rotation across the 3 blank bones!
-      const b1 = bones.rod_blank_01;
-      const b2 = bones.rod_blank_02;
-      const b3 = bones.rod_blank_03;
+      lastBendDown = downwardBend;
+      lastBendSide = sideBend;
+      const b = getActive().bones;
+      const b1 = b.rod_blank_01;
+      const b2 = b.rod_blank_02;
+      const b3 = b.rod_blank_03;
       if (b1 && b2 && b3) {
         b1.rotation.set(-downwardBend * 0.32, -sideBend * 0.28, 0);
         b2.rotation.set(-downwardBend * 0.52, -sideBend * 0.42, 0);
@@ -359,10 +425,11 @@ function buildTailorRigRodController(rodScene, rodScale = 2.05) {
     },
     spinReel(dt, speed = 10.0) {
       crankAngle += dt * speed;
-      if (bones.reel_crank) {
-        bones.reel_crank.rotation.x = crankAngle;
+      const act = getActive();
+      if (act.bones.reel_crank) {
+        act.bones.reel_crank.rotation.x = crankAngle;
       }
-      reelCrankOrbit.position.set(
+      act.reelCrankOrbit.position.set(
         -0.042,
         -0.008 + Math.sin(crankAngle) * 0.022,
         Math.cos(crankAngle) * 0.022
@@ -370,22 +437,26 @@ function buildTailorRigRodController(rodScene, rodScale = 2.05) {
     },
     getTipWorldPosition(outVec) {
       root.updateWorldMatrix(true, true);
-      if (bones.rod_tip) return bones.rod_tip.getWorldPosition(outVec);
+      const b = getActive().bones;
+      if (b.rod_tip) return b.rod_tip.getWorldPosition(outVec);
       return outVec.set(0, 0, -1);
     },
     getRightGripWorldPosition(outVec) {
       root.updateWorldMatrix(true, true);
-      return rightGripAnchor.getWorldPosition(outVec);
+      return getActive().rightGripAnchor.getWorldPosition(outVec);
     },
     getLeftButtWorldPosition(outVec) {
       root.updateWorldMatrix(true, true);
-      return leftButtAnchor.getWorldPosition(outVec);
+      return getActive().leftButtAnchor.getWorldPosition(outVec);
     },
     getReelCrankWorldPosition(outVec) {
       root.updateWorldMatrix(true, true);
-      return reelCrankOrbit.getWorldPosition(outVec);
+      return getActive().reelCrankOrbit.getWorldPosition(outVec);
     },
   };
+
+  controller.setRodStyle("lure_red");
+  return controller;
 }
 
 /**
@@ -1181,7 +1252,9 @@ function buildRemoteAnglerActor(charScene, rodScene, bobberScene, opts = {}) {
   }
 
   // Attach TailorRig fishing rod in front of torso/chest (`facing -Z`)
+  let curRodId = opts.rodId || "lure_red";
   const rodCtrl = buildTailorRigRodController(rodScene, 1.55);
+  rodCtrl.setRodStyle(curRodId);
   const leftHandleAnchor = new THREE.Object3D();
   leftHandleAnchor.position.set(0.0, -0.008, 0.12);
   rodCtrl.group.add(leftHandleAnchor);
@@ -1319,6 +1392,10 @@ function buildRemoteAnglerActor(charScene, rodScene, bobberScene, opts = {}) {
       const targetYaw = Number(netState?.yaw) || 0;
       curName = netState?.name || curName;
       curLevel = Number(netState?.level) || curLevel;
+      if (netState?.rodId && netState.rodId !== curRodId) {
+        curRodId = netState.rodId;
+        rodCtrl.setRodStyle(curRodId);
+      }
 
       const dx = targetX - smoothPos.x;
       const dz = targetZ - smoothPos.z;

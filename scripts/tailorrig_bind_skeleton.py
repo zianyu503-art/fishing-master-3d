@@ -374,6 +374,73 @@ def rig_fishing_rod():
     print(f"Created TailorRig rod (Quaternius): {out.name} ({len(joints)} joints, 2 chains, {len(prims)} prims)")
 
 
+def rig_quaternius_rod_variant(
+    src_name: str,
+    out_name: str,
+    grip_thicken: float = 1.22,
+    y_offset: float = 0.0,
+    tip_y: float = -0.012,
+    reel_z_range: tuple = (0.10, 0.42),
+):
+    """Normalize a Poly Pizza Quaternius rod (+Z butt, -Z tip, -Y reel) & bind the 8-joint TailorRig skin."""
+    src = HF_DIR / src_name
+    gltf, blob = load_glb(src)
+
+    prims = gltf["meshes"][0]["primitives"]
+    all_pts = []
+    for pr in prims:
+        all_pts.extend(read_vec3_accessor(gltf, blob, pr["attributes"]["POSITION"]))
+    z_min = min(p[2] for p in all_pts)
+    z_max = max(p[2] for p in all_pts)
+    z_span = max(z_max - z_min, 1e-6)
+    cz = (z_min + z_max) * 0.5
+    scale = 1.0 / z_span
+
+    # R_x(180°): (x, y, z) -> (x, -y, -z) maps handle -> +Z, tip -> -Z, reel/guides -> -Y, crank -> -X
+    for pr in prims:
+        pts = read_vec3_accessor(gltf, blob, pr["attributes"]["POSITION"])
+        rot_pts = []
+        for p in pts:
+            rx, ry, rz = p[0] * scale, -p[1] * scale + y_offset, -(p[2] - cz) * scale
+            if rz > 0.255 and ry > -0.015:
+                rx *= grip_thicken
+                ry *= grip_thicken
+            rot_pts.append([rx, ry, rz])
+        write_vec3_accessor_in_place(gltf, blob, pr["attributes"]["POSITION"], rot_pts)
+        if "NORMAL" in pr["attributes"]:
+            nrms = read_vec3_accessor(gltf, blob, pr["attributes"]["NORMAL"])
+            rot_nrms = []
+            for n in nrms:
+                nx, ny, nz = n[0], -n[1], -n[2]
+                mag = math.sqrt(nx * nx + ny * ny + nz * nz) or 1.0
+                rot_nrms.append([nx / mag, ny / mag, nz / mag])
+            write_vec3_accessor_in_place(gltf, blob, pr["attributes"]["NORMAL"], rot_nrms)
+
+    joints = [
+        {"name": "rod_butt",     "parent": -1, "pos": (0.0,   0.0,     0.46), "chain": "rod_blank"},
+        {"name": "rod_grip",     "parent":  0, "pos": (0.0,   0.0,     0.34), "chain": "rod_blank"},
+        {"name": "rod_blank_01", "parent":  1, "pos": (0.0,   0.0,     0.14), "chain": "rod_blank"},
+        {"name": "rod_blank_02", "parent":  2, "pos": (0.0,   0.0,    -0.08), "chain": "rod_blank"},
+        {"name": "rod_blank_03", "parent":  3, "pos": (0.0,   0.0,    -0.30), "chain": "rod_blank"},
+        {"name": "rod_tip",      "parent":  4, "pos": (0.0,   tip_y,  -0.50), "chain": "rod_blank"},
+        {"name": "reel_body",    "parent":  1, "pos": (0.0,  -0.036,   0.26), "chain": "reel_aux"},
+        {"name": "reel_crank",   "parent":  6, "pos": (-0.042, -0.040, 0.26), "chain": "reel_aux"},
+    ]
+
+    rz0, rz1 = reel_z_range
+
+    def classify_rod_vertex(v):
+        x, y, z = v
+        if y < -0.014 and rz0 <= z <= rz1:
+            return "reel_aux"
+        return "rod_blank"
+
+    bind_tailorrig_skeleton(gltf, blob, joints, classify_rod_vertex, sigma=0.095, preserve_materials=True)
+    out = TRIG_OUT / out_name
+    save_glb(out, gltf, blob)
+    print(f"Created TailorRig rod variant: {out.name} ({len(joints)} joints, 2 chains, {len(prims)} prims)")
+
+
 def rig_fish(species_id: str, rotate_x_neg_to_z_pos: bool):
     src = TRELLIS_OUT / species_id / f"{species_id}.glb"
     gltf, blob = load_glb(src)
@@ -727,6 +794,22 @@ def rig_megalodon():
 
 if __name__ == "__main__":
     rig_fishing_rod()
+    rig_quaternius_rod_variant(
+        "fishing_rod_wood_quaternius.glb",
+        "fishing_rod_wood_tailorrig.glb",
+        grip_thicken=1.18,
+        y_offset=-0.004,
+        tip_y=-0.036,
+        reel_z_range=(0.10, 0.34),
+    )
+    rig_quaternius_rod_variant(
+        "fishing_rod_sport_quaternius.glb",
+        "fishing_rod_sport_tailorrig.glb",
+        grip_thicken=1.22,
+        y_offset=0.0,
+        tip_y=-0.012,
+        reel_z_range=(0.10, 0.39),
+    )
     rig_fish("largemouth_bass", rotate_x_neg_to_z_pos=True)
     rig_fish("common_carp", rotate_x_neg_to_z_pos=True)
     rig_fish("northern_pike", rotate_x_neg_to_z_pos=False)
