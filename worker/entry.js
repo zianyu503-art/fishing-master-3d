@@ -2,12 +2,22 @@ import { DurableObject } from "cloudflare:workers";
 
 const SPECIES_LIMITS = {
   largemouth_bass: { name: "鱸魚", maxKg: 3.5 },
+  blue_tang: { name: "帝王藍倒吊", maxKg: 2.0 },
   rainbow_trout: { name: "虹鱒", maxKg: 6.0 },
+  red_bellied_piranha: { name: "紅腹食人魚", maxKg: 3.8 },
   common_carp: { name: "鯉魚", maxKg: 8.5 },
+  sockeye_salmon: { name: "紅鮭魚", maxKg: 8.0 },
+  red_lionfish: { name: "絢麗獅子魚", maxKg: 3.5 },
   golden_arowana: { name: "傳奇金龍魚", maxKg: 9.5 },
   northern_pike: { name: "狗魚", maxKg: 16.0 },
+  mahi_mahi: { name: "黃金鬼頭刀", maxKg: 24.0 },
   wels_catfish: { name: "巨型湖鯰", maxKg: 34.0 },
+  yellowfin_tuna: { name: "黃鰭鮪魚", maxKg: 95.0 },
   electric_eel: { name: "巨型電鰻", maxKg: 24.0 },
+  beluga_sturgeon: { name: "史前巨鱘", maxKg: 205.0 },
+  pacific_sailfish: { name: "雨傘旗魚", maxKg: 108.0 },
+  ocean_sunfish: { name: "巨型翻車魚", maxKg: 270.0 },
+  hammerhead_shark: { name: "巨型雙髻鯊", maxKg: 320.0 },
   great_white_shark: { name: "狂暴大白鯊", maxKg: 380.0 },
 };
 

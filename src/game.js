@@ -25,8 +25,26 @@ const SPECIES_DB = [
     reelSpeed: 3.5,
     baseGold: 95,
     xp: 35,
-    spawnWeight: 0.34,
+    spawnWeight: 0.24,
     desc: "棲息於翡翠湖淺灘與木樁暗影處的掠食魚類，咬訊乾脆，適合新手練習控線手感。",
+  },
+  {
+    id: "blue_tang",
+    name: "帝王藍倒吊",
+    enName: "Blue Tang",
+    thumb: "./refs/blue_tang_ref.webp",
+    difficulty: "容易",
+    diffColor: "#38bdf8",
+    minKg: 0.2,
+    maxKg: 1.6,
+    weightPower: 1.25,
+    fightStrength: 0.72,
+    staminaDrainRate: 23.0,
+    reelSpeed: 3.6,
+    baseGold: 135,
+    xp: 45,
+    spawnWeight: 0.20,
+    desc: "通體呈現鮮豔寶藍與明黃尾鰭的珊瑚礁精靈，游姿靈巧，極易成群穿梭於棧橋淺水處。",
   },
   {
     id: "rainbow_trout",
@@ -43,8 +61,26 @@ const SPECIES_DB = [
     reelSpeed: 3.0,
     baseGold: 165,
     xp: 55,
-    spawnWeight: 0.22,
+    spawnWeight: 0.16,
     desc: "來自 Hugging Face 世界魚類庫的冷水迴游魚種，體側帶有彩虹斑紋且躍水洗鰓極為靈活。",
+  },
+  {
+    id: "red_bellied_piranha",
+    name: "紅腹食人魚",
+    enName: "Red-Bellied Piranha",
+    thumb: "./refs/red_bellied_piranha_ref.webp",
+    difficulty: "普通",
+    diffColor: "#fb7185",
+    minKg: 0.5,
+    maxKg: 3.2,
+    weightPower: 1.35,
+    fightStrength: 1.05,
+    staminaDrainRate: 16.5,
+    reelSpeed: 2.9,
+    baseGold: 185,
+    xp: 60,
+    spawnWeight: 0.14,
+    desc: "生性兇猛的火紅掠食魚群！銳利鋸齒咬鉤瞬間爆發力十足，需迅速揚竿壓制。",
   },
   {
     id: "common_carp",
@@ -61,8 +97,44 @@ const SPECIES_DB = [
     reelSpeed: 2.7,
     baseGold: 210,
     xp: 70,
-    spawnWeight: 0.18,
+    spawnWeight: 0.14,
     desc: "體型厚實飽滿的底棲魚種，耐力持久且喜歡貼底發力拉扯魚線。",
+  },
+  {
+    id: "sockeye_salmon",
+    name: "紅鮭魚",
+    enName: "Sockeye Salmon",
+    thumb: "./refs/sockeye_salmon_ref.webp",
+    difficulty: "普通",
+    diffColor: "#f43f5e",
+    minKg: 1.4,
+    maxKg: 7.0,
+    weightPower: 1.45,
+    fightStrength: 1.12,
+    staminaDrainRate: 14.5,
+    reelSpeed: 2.65,
+    baseGold: 245,
+    xp: 80,
+    spawnWeight: 0.13,
+    desc: "洄游期全身轉為熾紅銀綠的強壯鮭魚，善於長距離高速衝刺翻騰。",
+  },
+  {
+    id: "red_lionfish",
+    name: "絢麗獅子魚",
+    enName: "Red Lionfish",
+    thumb: "./refs/red_lionfish_ref.webp",
+    difficulty: "稀有",
+    diffColor: "#f97316",
+    minKg: 0.6,
+    maxKg: 2.8,
+    weightPower: 1.4,
+    fightStrength: 1.18,
+    staminaDrainRate: 14.0,
+    reelSpeed: 2.55,
+    baseGold: 420,
+    xp: 120,
+    spawnWeight: 0.09,
+    desc: "張開如鳳凰羽翼般紅白條紋毒棘鰭的華麗海中掠食者，身形奇美且賞金不菲。",
   },
   {
     id: "golden_arowana",
@@ -79,7 +151,7 @@ const SPECIES_DB = [
     reelSpeed: 2.5,
     baseGold: 980,
     xp: 180,
-    spawnWeight: 0.09,
+    spawnWeight: 0.08,
     desc: "鱗片閃耀金色光澤的稀有觀賞魚皇，身價極高，上鉤後擅長暴衝躍出水面。",
   },
   {
@@ -97,8 +169,26 @@ const SPECIES_DB = [
     reelSpeed: 2.15,
     baseGold: 440,
     xp: 130,
-    spawnWeight: 0.09,
+    spawnWeight: 0.08,
     desc: "翡翠湖深水區的兇猛掠食霸主，爆發衝刺極猛，衝刺期間強行收線極易斷線！",
+  },
+  {
+    id: "mahi_mahi",
+    name: "黃金鬼頭刀",
+    enName: "Mahi-Mahi",
+    thumb: "./refs/mahi_mahi_ref.webp",
+    difficulty: "困難",
+    diffColor: "#a3e635",
+    minKg: 3.5,
+    maxKg: 20.0,
+    weightPower: 1.5,
+    fightStrength: 1.46,
+    staminaDrainRate: 10.2,
+    reelSpeed: 2.1,
+    baseGold: 640,
+    xp: 175,
+    spawnWeight: 0.075,
+    desc: "閃耀螢光金綠藍色的外洋高速戰士，頭額隆起如戰斧，躍水甩頭力度驚人！",
   },
   {
     id: "wels_catfish",
@@ -119,6 +209,24 @@ const SPECIES_DB = [
     desc: "潛伏於翡翠湖深坑底部的巨無霸鯰魚，極為沉重，非常容易打破重量排行榜紀錄。",
   },
   {
+    id: "yellowfin_tuna",
+    name: "黃鰭鮪魚",
+    enName: "Yellowfin Tuna",
+    thumb: "./refs/yellowfin_tuna_ref.webp",
+    difficulty: "困難",
+    diffColor: "#eab308",
+    minKg: 12.0,
+    maxKg: 85.0,
+    weightPower: 1.55,
+    fightStrength: 1.56,
+    staminaDrainRate: 8.8,
+    reelSpeed: 1.9,
+    baseGold: 890,
+    xp: 235,
+    spawnWeight: 0.065,
+    desc: "肌肉極度發達的深藍迴游巨鮪，長鐮狀黃色背鰭如同渦輪引擎，耐力拉鋸極考驗控線節奏。",
+  },
+  {
     id: "electric_eel",
     name: "巨型電鰻",
     enName: "Electric Eel",
@@ -134,8 +242,80 @@ const SPECIES_DB = [
     reelSpeed: 2.05,
     baseGold: 1350,
     xp: 260,
-    spawnWeight: 0.08,
+    spawnWeight: 0.06,
     desc: "體內能釋放高壓藍電流的奇異電鰻！周身放電時切勿強拉，捕獲後電擊武器威力倍增。",
+  },
+  {
+    id: "beluga_sturgeon",
+    name: "史前巨鱘",
+    enName: "Beluga Sturgeon",
+    thumb: "./refs/beluga_sturgeon_ref.webp",
+    difficulty: "極稀有",
+    diffColor: "#94a3b8",
+    minKg: 25.0,
+    maxKg: 185.0,
+    weightPower: 1.55,
+    fightStrength: 1.62,
+    staminaDrainRate: 8.0,
+    reelSpeed: 1.82,
+    baseGold: 1180,
+    xp: 280,
+    spawnWeight: 0.055,
+    desc: "身披裝甲骨板的遠古活化石巨鱘！體重動輒破百公斤，深潛穩重拉扯感無與倫比。",
+  },
+  {
+    id: "pacific_sailfish",
+    name: "雨傘旗魚",
+    enName: "Pacific Sailfish",
+    thumb: "./refs/pacific_sailfish_ref.webp",
+    difficulty: "極稀有",
+    diffColor: "#0ea5e9",
+    minKg: 18.0,
+    maxKg: 95.0,
+    weightPower: 1.5,
+    fightStrength: 1.65,
+    staminaDrainRate: 8.2,
+    reelSpeed: 1.85,
+    baseGold: 1280,
+    xp: 310,
+    spawnWeight: 0.055,
+    desc: "大海最快極速王者！張開帆船般巨大寶藍背鰭與長矛吻部，擅用「⚡電擊反擊」壓制其衝鋒！",
+  },
+  {
+    id: "ocean_sunfish",
+    name: "巨型翻車魚",
+    enName: "Ocean Sunfish",
+    thumb: "./refs/ocean_sunfish_ref.webp",
+    difficulty: "極稀有",
+    diffColor: "#a78bfa",
+    minKg: 40.0,
+    maxKg: 240.0,
+    weightPower: 1.48,
+    fightStrength: 1.60,
+    staminaDrainRate: 7.4,
+    reelSpeed: 1.78,
+    baseGold: 1450,
+    xp: 340,
+    spawnWeight: 0.05,
+    desc: "外型奇特巨大的圓盤狀深海巨獸，體型厚重宛如移動水牆，成功拉上岸將創下驚人磅數紀錄！",
+  },
+  {
+    id: "hammerhead_shark",
+    name: "巨型雙髻鯊",
+    enName: "Great Hammerhead",
+    thumb: "./refs/hammerhead_shark_ref.webp",
+    difficulty: "傳說巨獸",
+    diffColor: "#c084fc",
+    minKg: 50.0,
+    maxKg: 290.0,
+    weightPower: 1.45,
+    fightStrength: 1.70,
+    staminaDrainRate: 6.9,
+    reelSpeed: 1.70,
+    baseGold: 1750,
+    xp: 390,
+    spawnWeight: 0.045,
+    desc: "頭頂橫展巨大雙髻雷達的頂級遠洋掠食鯊！暴躁兇猛且獎金豐厚，建議遠投深水區迎戰。",
   },
   {
     id: "great_white_shark",
@@ -153,16 +333,45 @@ const SPECIES_DB = [
     reelSpeed: 1.65,
     baseGold: 2200,
     xp: 480,
-    spawnWeight: 0.06,
+    spawnWeight: 0.05,
     desc: "誤入翡翠湖的頂級兇猛獵食者！上鉤後會撲咬攻擊玩家，按「⚡ 電擊反擊」將其電死即可收服！",
   },
 ];
 
 const BAITS = [
-  { id: "earthworm", name: "蚯蚓", bonusPike: 1.0, biteSpeed: 1.0, cost: 0, desc: "萬用自然活餌，全魚種皆有幾率咬鉤" },
-  { id: "corn_dough", name: "香甜玉米餌", bonusCarp: 1.9, bonusTrout: 1.4, bonusArowana: 1.5, biteSpeed: 1.2, cost: 150, desc: "大幅提升鯉魚、虹鱒與金龍魚上鉤機率" },
-  { id: "minnow_lure", name: "擬真小魚餌", bonusPike: 2.4, bonusBass: 1.4, bonusCatfish: 1.6, biteSpeed: 1.15, cost: 350, desc: "專攻大口黑鱸、狗魚與巨型湖鯰" },
-  { id: "blood_chum", name: "深海血腥餌", bonusShark: 3.8, bonusEel: 2.8, bonusCatfish: 1.8, biteSpeed: 1.25, cost: 600, desc: "誘引狂暴大白鯊與高壓電鰻現身的獵殺特調餌" },
+  { id: "earthworm", name: "蚯蚓", bonuses: {}, biteSpeed: 1.0, cost: 0, desc: "萬用自然活餌，全 18 種魚類皆有幾率咬鉤" },
+  {
+    id: "corn_dough",
+    name: "香甜玉米餌",
+    bonuses: { common_carp: 1.9, rainbow_trout: 1.4, golden_arowana: 1.5, blue_tang: 1.7, sockeye_salmon: 1.5 },
+    biteSpeed: 1.2,
+    cost: 150,
+    desc: "大幅提升鯉魚、藍倒吊、紅鮭、虹鱒與金龍魚上鉤機率",
+  },
+  {
+    id: "minnow_lure",
+    name: "擬真小魚餌",
+    bonuses: { northern_pike: 2.3, largemouth_bass: 1.4, wels_catfish: 1.6, red_bellied_piranha: 2.0, red_lionfish: 1.9, beluga_sturgeon: 1.7 },
+    biteSpeed: 1.15,
+    cost: 350,
+    desc: "專攻食人魚、獅子魚、狗魚、史前巨鱘與巨型湖鯰",
+  },
+  {
+    id: "deep_ocean_jig",
+    name: "深海鐵板路亞",
+    bonuses: { mahi_mahi: 2.6, yellowfin_tuna: 2.6, pacific_sailfish: 2.8, ocean_sunfish: 2.8, hammerhead_shark: 2.4 },
+    biteSpeed: 1.22,
+    cost: 480,
+    desc: "遠投專武！強效誘捕鬼頭刀、黃鰭鮪、雨傘旗魚、翻車魚與雙髻鯊",
+  },
+  {
+    id: "blood_chum",
+    name: "深海血腥餌",
+    bonuses: { great_white_shark: 3.8, hammerhead_shark: 2.4, electric_eel: 2.8, wels_catfish: 1.8, red_bellied_piranha: 1.8 },
+    biteSpeed: 1.25,
+    cost: 600,
+    desc: "誘引狂暴大白鯊、雙髻鯊與高壓電鰻現身的獵殺特調餌",
+  },
 ];
 
 const ENV_ORDER = ["lakeside", "pier", "alpine"];
@@ -677,23 +886,39 @@ export class FishingMasterGame {
       this.scene.add(reeds);
     });
 
-    // 7. Spawn 18 Live TailorRig Skinned Underwater Fish across all 8 species (including Shark & Electric Eel!)
+    // 7. Spawn 26 Live TailorRig Skinned Underwater Fish across all 18 species
     const poolSpec = [
-      "largemouth_bass", "largemouth_bass", "largemouth_bass",
-      "rainbow_trout", "rainbow_trout", "rainbow_trout",
+      "largemouth_bass", "largemouth_bass",
+      "blue_tang", "blue_tang",
+      "rainbow_trout", "rainbow_trout",
+      "red_bellied_piranha", "red_bellied_piranha",
       "common_carp", "common_carp",
-      "golden_arowana", "golden_arowana",
+      "sockeye_salmon", "sockeye_salmon",
+      "red_lionfish",
+      "golden_arowana",
       "northern_pike", "northern_pike",
-      "wels_catfish", "wels_catfish",
-      "electric_eel", "electric_eel",
+      "mahi_mahi",
+      "wels_catfish",
+      "yellowfin_tuna",
+      "electric_eel",
+      "beluga_sturgeon",
+      "pacific_sailfish",
+      "ocean_sunfish",
+      "hammerhead_shark",
       "great_white_shark", "great_white_shark",
     ];
+    const deepSpecies = new Set([
+      "great_white_shark", "hammerhead_shark", "wels_catfish",
+      "beluga_sturgeon", "ocean_sunfish", "yellowfin_tuna", "pacific_sailfish",
+    ]);
+    const fastSpecies = new Set(["great_white_shark", "hammerhead_shark", "pacific_sailfish", "yellowfin_tuna", "mahi_mahi"]);
     poolSpec.forEach((specId, idx) => {
       const actor = this.assets.fishFactory[specId]();
-      const homeX = (Math.random() - 0.5) * 28;
-      const isDeep = specId === "great_white_shark" || specId === "wels_catfish";
+      const homeX = (Math.random() - 0.5) * 30;
+      const isDeep = deepSpecies.has(specId);
+      const isFast = fastSpecies.has(specId);
       const homeZ = isDeep ? 12.0 - Math.random() * 16.0 : 22.0 - Math.random() * 24.0;
-      const depth = specId === "great_white_shark" ? -0.95 - Math.random() * 0.7 : -0.45 - Math.random() * 1.1;
+      const depth = isDeep ? -0.95 - Math.random() * 0.75 : -0.45 - Math.random() * 1.1;
       actor.group.position.set(homeX, depth, homeZ);
       const heading = Math.random() * Math.PI * 2;
       actor.group.rotation.y = heading;
@@ -702,7 +927,7 @@ export class FishingMasterGame {
         specId,
         actor,
         depth,
-        speed: specId === "great_white_shark" ? 1.45 + Math.random() * 0.6 : 0.85 + Math.random() * 0.75,
+        speed: isFast ? 1.45 + Math.random() * 0.65 : 0.85 + Math.random() * 0.75,
         turnTarget: heading,
         turnTimer: 1 + Math.random() * 3,
         phaseOffset: idx * 1.7,
@@ -973,17 +1198,18 @@ export class FishingMasterGame {
 
   _pickTargetFishSpecies() {
     const bait = BAITS.find((b) => b.id === this.activeBaitId) || BAITS[0];
-    const deepBonus = this.fishDist > 19 ? 1.65 : 1.0;
+    const deepBonus = this.fishDist > 18 ? 1.65 : 1.0;
+    const midDeepSpecies = new Set(["common_carp", "golden_arowana", "red_lionfish", "sockeye_salmon"]);
+    const deepPoolSpecies = new Set([
+      "northern_pike", "mahi_mahi", "wels_catfish", "yellowfin_tuna",
+      "electric_eel", "beluga_sturgeon", "pacific_sailfish", "ocean_sunfish",
+    ]);
+    const apexSpecies = new Set(["hammerhead_shark", "great_white_shark"]);
     const weights = SPECIES_DB.map((sp) => {
-      let w = sp.spawnWeight;
-      if (sp.id === "largemouth_bass" && bait.bonusBass) w *= bait.bonusBass;
-      if (sp.id === "rainbow_trout" && bait.bonusTrout) w *= bait.bonusTrout;
-      if (sp.id === "common_carp") w *= (bait.bonusCarp || 1.0) * (this.fishDist > 15 ? 1.25 : 1.0);
-      if (sp.id === "golden_arowana") w *= (bait.bonusArowana || 1.0) * (this.fishDist > 14 ? 1.3 : 1.0);
-      if (sp.id === "northern_pike") w *= (bait.bonusPike || 1.0) * deepBonus;
-      if (sp.id === "wels_catfish") w *= (bait.bonusCatfish || 1.0) * deepBonus;
-      if (sp.id === "electric_eel") w *= (bait.bonusEel || 1.0) * deepBonus;
-      if (sp.id === "great_white_shark") w *= (bait.bonusShark || 1.0) * (this.fishDist > 18 ? 1.75 : 0.75);
+      let w = sp.spawnWeight * (bait.bonuses?.[sp.id] || 1.0);
+      if (midDeepSpecies.has(sp.id) && this.fishDist > 14) w *= 1.3;
+      if (deepPoolSpecies.has(sp.id)) w *= deepBonus;
+      if (apexSpecies.has(sp.id)) w *= this.fishDist > 18 ? 1.75 : 0.75;
       return w;
     });
     const sum = weights.reduce((a, b) => a + b, 0);
@@ -1290,13 +1516,23 @@ export class FishingMasterGame {
     this.trophyFishActor.group.position.set(-0.18, 0.02, 0);
     const fitMap = {
       great_white_shark: 0.44,
+      hammerhead_shark: 0.46,
+      ocean_sunfish: 0.42,
+      beluga_sturgeon: 0.52,
+      pacific_sailfish: 0.56,
+      yellowfin_tuna: 0.68,
       electric_eel: 0.72,
       wels_catfish: 0.76,
+      mahi_mahi: 0.82,
       northern_pike: 0.92,
       golden_arowana: 1.15,
+      sockeye_salmon: 1.15,
       common_carp: 1.15,
+      red_lionfish: 1.20,
       rainbow_trout: 1.25,
       largemouth_bass: 1.32,
+      red_bellied_piranha: 1.38,
+      blue_tang: 1.45,
     };
     this.trophyFishActor.setScaleMultiplier(fitMap[species.id] || 1.1);
     this.trophyStageGroup.add(this.trophyFishActor.group);

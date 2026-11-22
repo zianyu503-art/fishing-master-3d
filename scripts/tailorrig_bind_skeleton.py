@@ -597,4 +597,17 @@ if __name__ == "__main__":
     rig_world_fish("golden_arowana", z_stretch=1.0)
     rig_world_fish("electric_eel", z_stretch=1.50)
     rig_world_fish("great_white_shark", z_stretch=1.0)
+    for new_sid in (
+        "blue_tang",
+        "red_bellied_piranha",
+        "sockeye_salmon",
+        "red_lionfish",
+        "mahi_mahi",
+        "yellowfin_tuna",
+        "beluga_sturgeon",
+        "pacific_sailfish",
+        "ocean_sunfish",
+        "hammerhead_shark",
+    ):
+        rig_world_fish(new_sid, z_stretch=1.0)
     print("=== All TailorRig SkinnedMesh .glb assets built successfully! ===")
