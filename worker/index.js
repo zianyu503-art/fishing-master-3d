@@ -20,6 +20,17 @@ const SPECIES_LIMITS = {
   hammerhead_shark: { name: "巨型雙髻鯊", maxKg: 465.0 },
   great_white_shark: { name: "狂暴大白鯊", maxKg: 550.0 },
   megalodon: { name: "遠古巨齒鯊", maxKg: 2600.0 },
+  clown_triggerfish: { name: "小丑砲彈魚", maxKg: 4.0 },
+  tiger_puffer: { name: "虎河豚", maxKg: 7.5 },
+  great_barracuda: { name: "大梭魚", maxKg: 28.0 },
+  blobfish: { name: "深海水滴魚", maxKg: 6.8 },
+  alligator_gar: { name: "長吻雀鱔", maxKg: 44.0 },
+  anglerfish: { name: "深海燈籠魚", maxKg: 25.0 },
+  giant_grouper: { name: "龍膽石斑", maxKg: 215.0 },
+  coelacanth: { name: "遠古腔棘魚", maxKg: 145.0 },
+  oarfish: { name: "龍宮皇帶魚", maxKg: 320.0 },
+  goblin_shark: { name: "深海哥布林鯊", maxKg: 365.0 },
+  whale_shark: { name: "深海鯨鯊", maxKg: 1750.0 },
 };
 
 const UPSTREAM_ASSETS_BASE = "https://zianyu503-art.github.io/fishing-master-3d";

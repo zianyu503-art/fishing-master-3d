@@ -748,6 +748,17 @@ if __name__ == "__main__":
         "pacific_sailfish",
         "ocean_sunfish",
         "hammerhead_shark",
+        "clown_triggerfish",
+        "tiger_puffer",
+        "great_barracuda",
+        "blobfish",
+        "alligator_gar",
+        "anglerfish",
+        "giant_grouper",
+        "coelacanth",
+        "oarfish",
+        "goblin_shark",
+        "whale_shark",
     ):
         rig_world_fish(new_sid, z_stretch=1.0)
     print("=== All TailorRig SkinnedMesh .glb assets built successfully! ===")
