@@ -387,7 +387,7 @@ const RODS = [
     name: "🎓 考試釣竿",
     isExamRod: true,
     cost: 100000,
-    desc: "極其昂貴的傳奇黃金評分神竿！釣起的每一種魚都會標記 1～100 分等級，分數越高魚體變得越龐大、賞金暴增且綻放尊榮金光！",
+    desc: "極其昂貴的傳奇黃金評分神竿！釣起的每一種魚都會用紅字直接寫在魚身上標記 1～100 分，分數越高魚體變得越龐大、賞金暴增且綻放尊榮金光！",
   },
 ];
 
@@ -1461,6 +1461,9 @@ export class FishingMasterGame {
 
     this.hookedFishActor = this.assets.fishFactory[species.id]();
     this.hookedFishActor.setScaleMultiplier((0.85 + sizeNorm * 0.45) * examScaleBoost);
+    if (examScore != null && this.hookedFishActor.setExamScore) {
+      this.hookedFishActor.setExamScore(examScore);
+    }
     this.hookedFishActor.group.position.set(this.bobberRig.position.x, -0.22, this.bobberRig.position.z);
     this.scene.add(this.hookedFishActor.group);
 
@@ -1580,22 +1583,8 @@ export class FishingMasterGame {
     };
     const examTrophyScale = examScore != null ? 0.74 + ((examScore - 1) / 99) * 0.54 : 1.0;
     this.trophyFishActor.setScaleMultiplier((fitMap[species.id] || 1.1) * examTrophyScale);
-    if (examScore != null && examScore >= 80) {
-      const glowStrength = 0.45 + ((examScore - 80) / 20) * 0.55;
-      this.trophyFishActor.group.traverse((c) => {
-        if (c.isMesh && c.material) {
-          const mats = Array.isArray(c.material) ? c.material : [c.material];
-          const cloned = mats.map((m) => {
-            const cm = m.clone();
-            if ("emissive" in cm) {
-              cm.emissive.setHex(0x3a2500);
-              cm.emissiveIntensity = glowStrength;
-            }
-            return cm;
-          });
-          c.material = Array.isArray(c.material) ? cloned : cloned[0];
-        }
-      });
+    if (examScore != null && this.trophyFishActor.setExamScore) {
+      this.trophyFishActor.setExamScore(examScore);
     }
     this.trophyStageGroup.add(this.trophyFishActor.group);
 

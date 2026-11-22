@@ -819,6 +819,198 @@ function attachSharkOralAnatomy(bones) {
   };
 }
 
+const _examScoreTexCache = new Map();
+
+/**
+ * Creates a transparent 512x256 teacher's red-pen exam grade texture (1-100分)
+ * for direct projection onto both flanks of 3D fish meshes.
+ */
+function createExamScoreTexture(score) {
+  const s = Math.max(1, Math.min(100, Math.round(Number(score) || 1)));
+  if (_examScoreTexCache.has(s)) return _examScoreTexCache.get(s);
+
+  const canvas = document.createElement("canvas");
+  canvas.width = 512;
+  canvas.height = 256;
+  const ctx = canvas.getContext("2d");
+  ctx.clearRect(0, 0, 512, 256);
+
+  ctx.save();
+  ctx.translate(256, 116);
+  ctx.rotate(-0.09);
+
+  const numStr = String(s);
+  const numFont = s >= 100
+    ? "900 122px 'Arial Black', 'PingFang TC', 'Noto Sans TC', sans-serif"
+    : "900 138px 'Arial Black', 'PingFang TC', 'Noto Sans TC', sans-serif";
+  const unitFont = "900 60px 'PingFang TC', 'Noto Sans TC', sans-serif";
+
+  ctx.font = numFont;
+  const numW = ctx.measureText(numStr).width;
+  ctx.font = unitFont;
+  const unitW = ctx.measureText("分").width;
+  const gap = 8;
+  const totalW = numW + gap + unitW;
+  const startX = -totalW * 0.5;
+
+  // Soft pale outline halo keeps crimson red ink vivid against dark shark/catfish skin
+  ctx.textAlign = "left";
+  ctx.textBaseline = "middle";
+  ctx.lineJoin = "round";
+
+  ctx.font = numFont;
+  ctx.strokeStyle = "rgba(255, 240, 240, 0.72)";
+  ctx.lineWidth = 14;
+  ctx.strokeText(numStr, startX, -4);
+  ctx.fillStyle = "#ff1818";
+  ctx.fillText(numStr, startX, -4);
+
+  ctx.font = unitFont;
+  ctx.strokeStyle = "rgba(255, 240, 240, 0.72)";
+  ctx.lineWidth = 10;
+  ctx.strokeText("分", startX + numW + gap, 16);
+  ctx.fillStyle = "#ef1515";
+  ctx.fillText("分", startX + numW + gap, 16);
+
+  // Two compact teacher red-marker underline strokes snugly beneath the score
+  const uLeft = Math.max(-220, startX - 8);
+  const uRight = Math.min(220, startX + totalW + 8);
+  for (const [yOff, lw] of [[56, 8.5], [71, 5.5]]) {
+    ctx.beginPath();
+    ctx.moveTo(uLeft, yOff + 4);
+    ctx.quadraticCurveTo(0, yOff - 4, uRight, yOff);
+    ctx.strokeStyle = "rgba(255, 240, 240, 0.55)";
+    ctx.lineWidth = lw + 5;
+    ctx.lineCap = "round";
+    ctx.stroke();
+    ctx.strokeStyle = "#ff1818";
+    ctx.lineWidth = lw;
+    ctx.stroke();
+  }
+
+  // Hand-drawn oval ring highlight for perfect 100 score
+  if (s >= 100) {
+    ctx.beginPath();
+    ctx.ellipse(0, 4, Math.min(230, totalW * 0.55 + 22), 92, -0.04, 0, Math.PI * 2);
+    ctx.strokeStyle = "rgba(255, 240, 240, 0.48)";
+    ctx.lineWidth = 11;
+    ctx.stroke();
+    ctx.strokeStyle = "#ff1818";
+    ctx.lineWidth = 6.5;
+    ctx.stroke();
+  }
+
+  ctx.restore();
+
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.anisotropy = 4;
+  tex.needsUpdate = true;
+  _examScoreTexCache.set(s, tex);
+  return tex;
+}
+
+/**
+ * Stamps the Exam Rod score (1-100) directly onto both flanks of a TailorRig SkinnedMesh fish
+ * in bind space so the red ink deforms naturally with swimming bones.
+ */
+function applyExamScoreStamp(actorGroup, score) {
+  const s = Math.max(1, Math.min(100, Math.round(Number(score) || 1)));
+  const tex = createExamScoreTexture(s);
+  const glowStrength = s >= 80 ? 0.45 + ((s - 80) / 20) * 0.55 : 0.0;
+
+  actorGroup.traverse((c) => {
+    if (!c.isSkinnedMesh || !c.geometry || !c.material) return;
+    if (c.name && c.name.startsWith("shark_")) return;
+
+    const posAttr = c.geometry.attributes.position;
+    const ysMid = [];
+    if (posAttr) {
+      for (let i = 0; i < posAttr.count; i++) {
+        const z = posAttr.getZ(i);
+        if (z >= -0.16 && z <= 0.16) {
+          ysMid.push(posAttr.getY(i));
+        }
+      }
+    }
+    let yLo = -0.08;
+    let yHi = 0.08;
+    if (ysMid.length >= 16) {
+      ysMid.sort((a, b) => a - b);
+      // Use inner 16th-84th percentile to ignore narrow dorsal/pectoral/pelvic fin spikes!
+      yLo = ysMid[Math.floor(ysMid.length * 0.16)];
+      yHi = ysMid[Math.floor(ysMid.length * 0.84)];
+    }
+    const midCenterY = (yLo + yHi) * 0.5 + (yHi - yLo) * 0.08;
+    const halfY = THREE.MathUtils.clamp((yHi - yLo) * 0.44, 0.045, 0.105);
+    const halfZ = Math.min(0.22, halfY * 2.0);
+    const bounds = new THREE.Vector4(-0.02 - halfZ, -0.02 + halfZ, midCenterY - halfY, midCenterY + halfY);
+
+    const srcMats = Array.isArray(c.material) ? c.material : [c.material];
+    const patched = srcMats.map((m) => {
+      const cm = m.clone();
+      if (glowStrength > 0 && "emissive" in cm) {
+        cm.emissive.setHex(0x3a2500);
+        cm.emissiveIntensity = glowStrength;
+      }
+      cm.customProgramCacheKey = () => "exam_score_body_stamp_v3";
+      cm.onBeforeCompile = (shader) => {
+        shader.uniforms.uExamScoreMap = { value: tex };
+        shader.uniforms.uExamBounds = { value: bounds };
+
+        shader.vertexShader = shader.vertexShader
+          .replace(
+            "#include <common>",
+            "#include <common>\nvarying vec3 vExamBindPos;\nvarying vec3 vExamBindNrm;"
+          )
+          .replace(
+            "#include <beginnormal_vertex>",
+            "#include <beginnormal_vertex>\nvExamBindNrm = normalize(objectNormal);"
+          )
+          .replace(
+            "#include <begin_vertex>",
+            "#include <begin_vertex>\nvExamBindPos = position;"
+          );
+
+        shader.fragmentShader = shader.fragmentShader
+          .replace(
+            "#include <common>",
+            `#include <common>
+uniform sampler2D uExamScoreMap;
+uniform vec4 uExamBounds;
+varying vec3 vExamBindPos;
+varying vec3 vExamBindNrm;
+vec4 sampleExamScoreInk() {
+  float sideMask = smoothstep(0.26, 0.54, abs(vExamBindNrm.x));
+  if (sideMask <= 0.001) return vec4(0.0);
+  float zSpan = max(uExamBounds.y - uExamBounds.x, 1e-4);
+  float ySpan = max(uExamBounds.w - uExamBounds.z, 1e-4);
+  float u = vExamBindNrm.x >= 0.0
+    ? (uExamBounds.y - vExamBindPos.z) / zSpan
+    : (vExamBindPos.z - uExamBounds.x) / zSpan;
+  float v = (vExamBindPos.y - uExamBounds.z) / ySpan;
+  if (u < 0.0 || u > 1.0 || v < 0.0 || v > 1.0) return vec4(0.0);
+  vec4 tex = texture2D(uExamScoreMap, vec2(u, v));
+  tex.a *= sideMask;
+  return tex;
+}`
+          )
+          .replace(
+            "#include <map_fragment>",
+            "#include <map_fragment>\nvec4 _examInk = sampleExamScoreInk();\ndiffuseColor.rgb = mix(diffuseColor.rgb, _examInk.rgb, _examInk.a);"
+          )
+          .replace(
+            "#include <emissivemap_fragment>",
+            "#include <emissivemap_fragment>\nvec4 _examInkEm = sampleExamScoreInk();\ntotalEmissiveRadiance += _examInkEm.rgb * _examInkEm.a * 0.35;"
+          );
+      };
+      cm.needsUpdate = true;
+      return cm;
+    });
+    c.material = Array.isArray(c.material) ? patched : patched[0];
+  });
+}
+
 /**
  * TailorRig Skinned Fish Actor (`*_tailorrig.glb` — 9 bones across 4 kinematic chains,
  * plus 10th `jaw_lower` joint for `great_white_shark`).
@@ -848,6 +1040,9 @@ function createTailorRigFishActor(templateScene, baseLengthMeters) {
     },
     setJawOpen(open01) {
       if (oralRig) oralRig.setJawOpen(open01);
+    },
+    setExamScore(score) {
+      applyExamScoreStamp(group, score);
     },
     updateSwim(timeSec, speed = 4.5, yawAmp = 0.22) {
       const p = timeSec * speed;
