@@ -787,11 +787,9 @@ export class FishingMasterGame {
     this.unlockedRods = new Set(saved.unlockedRods ?? ["lure_red"]);
     this.activeRodId = saved.activeRodId ?? "lure_red";
     this.compendium = saved.compendium ?? {};
-    this.localLeaderboard = saved.localLeaderboard ?? [
-      { player_id: "seed-1", player_name: "翡翠老船長", species_id: "great_white_shark", species_name: "狂暴大白鯊", weight_kg: 184.5, coins: 6850, level: 6, total_catches: 24 },
-      { player_id: "seed-2", player_name: "高壓獵人阿強", species_id: "electric_eel", species_name: "巨型電鰻", weight_kg: 16.4, coins: 4220, level: 4, total_catches: 16 },
-      { player_id: "seed-3", player_name: "路亞小柔", species_id: "wels_catfish", species_name: "巨型湖鯰", weight_kg: 22.8, coins: 2850, level: 3, total_catches: 11 },
-    ];
+    this.localLeaderboard = (saved.localLeaderboard ?? []).filter(
+      (r) => !String(r?.player_id || "").startsWith("seed-")
+    );
     this._saveProgress();
 
     // Gameplay state machine: LOADING | IDLE | CHARGING | FLYING | WAITING | APPROACHING | NIBBLE | BITE | FIGHTING | SHOWCASE
