@@ -58,11 +58,23 @@ def read_vec3_accessor(gltf: dict, blob: bytearray, acc_idx: int):
     acc = gltf["accessors"][acc_idx]
     bv = gltf["bufferViews"][acc["bufferView"]]
     base = bv.get("byteOffset", 0) + acc.get("byteOffset", 0)
-    stride = bv.get("byteStride", 12)
+    stride = bv.get("byteStride") or 12
     pts = []
     for i in range(acc["count"]):
         pts.append(list(struct.unpack_from("<fff", blob, base + i * stride)))
     return pts
+
+
+def read_vec4_accessor(gltf: dict, blob: bytearray, acc_idx: int):
+    acc = gltf["accessors"][acc_idx]
+    bv = gltf["bufferViews"][acc["bufferView"]]
+    base = bv.get("byteOffset", 0) + acc.get("byteOffset", 0)
+    fmt_c = {5120: "b", 5121: "B", 5122: "h", 5123: "H", 5125: "I", 5126: "f"}[acc["componentType"]]
+    stride = bv.get("byteStride") or (struct.calcsize("<" + fmt_c) * 4)
+    out = []
+    for i in range(acc["count"]):
+        out.append(list(struct.unpack_from("<" + fmt_c * 4, blob, base + i * stride)))
+    return out
 
 
 def write_vec3_accessor_in_place(gltf: dict, blob: bytearray, acc_idx: int, pts):
@@ -614,6 +626,105 @@ def rig_world_fish(species_id: str, z_stretch: float = 1.0):
     print(f"Created TailorRig HF world-fish: {out.name} ({len(joints)} joints, {len(set(j['chain'] for j in joints))} chains)")
 
 
+def rig_megalodon():
+    """Normalize HF Otodus Megalodon (+Z snout, [-0.5,+0.5]) & bind 10-joint TailorRig skin with articulated jaw."""
+    src = HF_DIR / "otodus_megalodon.glb"
+    gltf, blob = load_glb(src)
+    prim = gltf["meshes"][0]["primitives"][0]
+
+    pts = read_vec3_accessor(gltf, blob, prim["attributes"]["POSITION"])
+    src_j0 = read_vec4_accessor(gltf, blob, prim["attributes"]["JOINTS_0"])
+    src_w0 = read_vec4_accessor(gltf, blob, prim["attributes"]["WEIGHTS_0"])
+
+    xs = [p[0] for p in pts]
+    ys = [p[1] for p in pts]
+    zs = [p[2] for p in pts]
+    cx = (min(xs) + max(xs)) * 0.5
+    cy = (min(ys) + max(ys)) * 0.5
+    cz = (min(zs) + max(zs)) * 0.5
+    z_span = max(max(zs) - min(zs), 1e-4)
+    scale = 1.0 / z_span
+
+    # Raw mesh vertices already face +Z snout, +Y dorsal, +-X flanks
+    norm_pts = [[(p[0] - cx) * scale, (p[1] - cy) * scale, (p[2] - cz) * scale] for p in pts]
+    write_vec3_accessor_in_place(gltf, blob, prim["attributes"]["POSITION"], norm_pts)
+
+    if "NORMAL" in prim["attributes"]:
+        nrms = read_vec3_accessor(gltf, blob, prim["attributes"]["NORMAL"])
+        unit_nrms = []
+        for n in nrms:
+            mag = math.sqrt(n[0] * n[0] + n[1] * n[1] + n[2] * n[2]) or 1.0
+            unit_nrms.append([n[0] / mag, n[1] / mag, n[2] / mag])
+        write_vec3_accessor_in_place(gltf, blob, prim["attributes"]["NORMAL"], unit_nrms)
+
+    # Strip washed-out Sketchfab unlit emissiveFactor so PBR shading and red exam stamp pop sharply
+    for mat in gltf.get("materials", []):
+        mat.pop("emissiveFactor", None)
+        mat.pop("emissiveTexture", None)
+        mat["doubleSided"] = True
+        pbr = mat.setdefault("pbrMetallicRoughness", {})
+        pbr["metallicFactor"] = 0.06
+        pbr["roughnessFactor"] = 0.38
+
+    gltf.pop("animations", None)
+
+    joints = [
+        {"name": "fish_root",     "parent": -1, "pos": (0.0,   -0.020,  0.120), "chain": "spine"},
+        {"name": "head",          "parent":  0, "pos": (0.0,   -0.016,  0.365), "chain": "spine"},
+        {"name": "spine_01",      "parent":  0, "pos": (0.0,   -0.020, -0.050), "chain": "spine"},
+        {"name": "spine_02",      "parent":  2, "pos": (0.0,   -0.020, -0.220), "chain": "spine"},
+        {"name": "tail_peduncle", "parent":  3, "pos": (0.0,   -0.020, -0.360), "chain": "spine"},
+        {"name": "caudal_fin",    "parent":  4, "pos": (0.0,   -0.010, -0.490), "chain": "spine"},
+        {"name": "dorsal_fin",    "parent":  2, "pos": (0.0,    0.120,  0.040), "chain": "dorsal_aux"},
+        {"name": "pectoral_l",    "parent":  0, "pos": (0.120, -0.090,  0.180), "chain": "pec_l_aux"},
+        {"name": "pectoral_r",    "parent":  0, "pos": (-0.120, -0.090, 0.180), "chain": "pec_r_aux"},
+        {"name": "jaw_lower",     "parent":  1, "pos": (0.0,   -0.067,  0.375), "chain": "jaw_lower"},
+    ]
+
+    # Map source Sketchfab lower jaw / teeth (joint 20), chin/throat (joint 19), upper head (17/18)
+    overrides = {}
+    for vi in range(len(norm_pts)):
+        wmap = {}
+        for k in range(4):
+            j_id = src_j0[vi][k]
+            wmap[j_id] = wmap.get(j_id, 0.0) + src_w0[vi][k]
+        w20 = wmap.get(20, 0.0)
+        w19 = wmap.get(19, 0.0)
+        w_upper = wmap.get(17, 0.0) + wmap.get(18, 0.0)
+        if w20 >= 0.80:
+            overrides[vi] = [(9, 1.0)]
+        elif w20 >= 0.20:
+            overrides[vi] = [(9, w20), (1, 1.0 - w20)]
+        elif w19 >= 0.45:
+            wj = 0.35 * _smoothstep(0.32, 0.38, norm_pts[vi][2])
+            overrides[vi] = [(9, wj), (1, 1.0 - wj)] if wj > 0.02 else [(1, 1.0)]
+        elif w_upper >= 0.45:
+            overrides[vi] = [(1, 1.0)]
+
+    def classify_megalodon_vertex(v):
+        x, y, z = v
+        if y > 0.068 and -0.12 <= z <= 0.16:
+            return "dorsal_aux"
+        if x > 0.075 and y < -0.04 and 0.10 <= z <= 0.26:
+            return "pec_l_aux"
+        if x < -0.075 and y < -0.04 and 0.10 <= z <= 0.26:
+            return "pec_r_aux"
+        return "spine"
+
+    bind_tailorrig_skeleton(
+        gltf,
+        blob,
+        joints,
+        classify_megalodon_vertex,
+        sigma=0.12,
+        vertex_weights_override=overrides,
+        preserve_materials=True,
+    )
+    out = TRIG_OUT / "megalodon_tailorrig.glb"
+    save_glb(out, gltf, blob)
+    print(f"Created TailorRig Megalodon: {out.name} ({len(joints)} joints, {len(overrides)} jaw/head overrides)")
+
+
 if __name__ == "__main__":
     rig_fishing_rod()
     rig_fish("largemouth_bass", rotate_x_neg_to_z_pos=True)
@@ -625,6 +736,7 @@ if __name__ == "__main__":
     rig_world_fish("golden_arowana", z_stretch=1.0)
     rig_world_fish("electric_eel", z_stretch=1.50)
     rig_world_fish("great_white_shark", z_stretch=1.0)
+    rig_megalodon()
     for new_sid in (
         "blue_tang",
         "red_bellied_piranha",

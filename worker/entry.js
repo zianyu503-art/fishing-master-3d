@@ -19,6 +19,7 @@ const SPECIES_LIMITS = {
   ocean_sunfish: { name: "巨型翻車魚", maxKg: 392.0 },
   hammerhead_shark: { name: "巨型雙髻鯊", maxKg: 465.0 },
   great_white_shark: { name: "狂暴大白鯊", maxKg: 550.0 },
+  megalodon: { name: "遠古巨齒鯊", maxKg: 2600.0 },
 };
 
 const CORS_HEADERS = {

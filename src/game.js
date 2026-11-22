@@ -336,10 +336,29 @@ const SPECIES_DB = [
     spawnWeight: 0.05,
     desc: "誤入翡翠湖的頂級兇猛獵食者！上鉤後會撲咬攻擊玩家，按「⚡ 電擊反擊」將其電死即可收服！",
   },
+  {
+    id: "megalodon",
+    name: "遠古巨齒鯊",
+    enName: "Otodus Megalodon",
+    thumb: "./refs/megalodon_ref.png",
+    difficulty: "神話首領",
+    diffColor: "#f43f5e",
+    isBoss: true,
+    minKg: 420.0,
+    maxKg: 1850.0,
+    weightPower: 1.45,
+    fightStrength: 1.85,
+    staminaDrainRate: 5.8,
+    reelSpeed: 1.55,
+    baseGold: 3600,
+    xp: 750,
+    spawnWeight: 0.035,
+    desc: "甦醒於翡翠湖最深處的史前巨獸之王！張開佈滿數十顆巨齒的血盆大口衝出水面撲咬，務必於瞬間按下「⚡ 電擊反擊」收服！",
+  },
 ];
 
 const BAITS = [
-  { id: "earthworm", name: "蚯蚓", bonuses: {}, biteSpeed: 1.0, cost: 0, desc: "萬用自然活餌，全 18 種魚類皆有幾率咬鉤" },
+  { id: "earthworm", name: "蚯蚓", bonuses: {}, biteSpeed: 1.0, cost: 0, desc: "萬用自然活餌，全 19 種魚類皆有幾率咬鉤" },
   {
     id: "corn_dough",
     name: "香甜玉米餌",
@@ -359,18 +378,18 @@ const BAITS = [
   {
     id: "deep_ocean_jig",
     name: "深海鐵板路亞",
-    bonuses: { mahi_mahi: 2.6, yellowfin_tuna: 2.6, pacific_sailfish: 2.8, ocean_sunfish: 2.8, hammerhead_shark: 2.4 },
+    bonuses: { mahi_mahi: 2.6, yellowfin_tuna: 2.6, pacific_sailfish: 2.8, ocean_sunfish: 2.8, hammerhead_shark: 2.4, megalodon: 2.2 },
     biteSpeed: 1.22,
     cost: 480,
-    desc: "遠投專武！強效誘捕鬼頭刀、黃鰭鮪、雨傘旗魚、翻車魚與雙髻鯊",
+    desc: "遠投專武！強效誘捕鬼頭刀、黃鰭鮪、雨傘旗魚、翻車魚、雙髻鯊與遠古巨齒鯊",
   },
   {
     id: "blood_chum",
     name: "深海血腥餌",
-    bonuses: { great_white_shark: 3.8, hammerhead_shark: 2.4, electric_eel: 2.8, wels_catfish: 1.8, red_bellied_piranha: 1.8 },
+    bonuses: { megalodon: 4.5, great_white_shark: 3.8, hammerhead_shark: 2.4, electric_eel: 2.8, wels_catfish: 1.8, red_bellied_piranha: 1.8 },
     biteSpeed: 1.25,
     cost: 600,
-    desc: "誘引狂暴大白鯊、雙髻鯊與高壓電鰻現身的獵殺特調餌",
+    desc: "誘引遠古巨齒鯊、狂暴大白鯊、雙髻鯊與高壓電鰻現身的獵殺特調餌",
   },
 ];
 
@@ -908,7 +927,7 @@ export class FishingMasterGame {
       this.scene.add(reeds);
     });
 
-    // 7. Spawn 26 Live TailorRig Skinned Underwater Fish across all 18 species
+    // 7. Spawn 27 Live TailorRig Skinned Underwater Fish across all 19 species
     const poolSpec = [
       "largemouth_bass", "largemouth_bass",
       "blue_tang", "blue_tang",
@@ -928,12 +947,13 @@ export class FishingMasterGame {
       "ocean_sunfish",
       "hammerhead_shark",
       "great_white_shark", "great_white_shark",
+      "megalodon",
     ];
     const deepSpecies = new Set([
-      "great_white_shark", "hammerhead_shark", "wels_catfish",
+      "megalodon", "great_white_shark", "hammerhead_shark", "wels_catfish",
       "beluga_sturgeon", "ocean_sunfish", "yellowfin_tuna", "pacific_sailfish",
     ]);
-    const fastSpecies = new Set(["great_white_shark", "hammerhead_shark", "pacific_sailfish", "yellowfin_tuna", "mahi_mahi"]);
+    const fastSpecies = new Set(["megalodon", "great_white_shark", "hammerhead_shark", "pacific_sailfish", "yellowfin_tuna", "mahi_mahi"]);
     poolSpec.forEach((specId, idx) => {
       const actor = this.assets.fishFactory[specId]();
       const homeX = (Math.random() - 0.5) * 30;
@@ -1227,7 +1247,7 @@ export class FishingMasterGame {
       "northern_pike", "mahi_mahi", "wels_catfish", "yellowfin_tuna",
       "electric_eel", "beluga_sturgeon", "pacific_sailfish", "ocean_sunfish",
     ]);
-    const apexSpecies = new Set(["hammerhead_shark", "great_white_shark"]);
+    const apexSpecies = new Set(["hammerhead_shark", "great_white_shark", "megalodon"]);
     const weights = SPECIES_DB.map((sp) => {
       let w = sp.spawnWeight * (bait.bonuses?.[sp.id] || 1.0);
       if (midDeepSpecies.has(sp.id) && this.fishDist > 14) w *= 1.3;
@@ -1307,7 +1327,7 @@ export class FishingMasterGame {
       this.ui.strikeRing.classList.remove("shock-qte");
       this.ui.strikeRing.textContent = "💦 揚竿！";
       this.ui.promptBanner.classList.remove("urgent");
-      this._showToast("⚡ 瞬間電擊命中！成功電死狂暴大白鯊！");
+      this._showToast(`⚡ 瞬間電擊命中！成功電死${this.activeCatch.species.name}！`);
       this._completeCatch({ electrocuted: true });
       return;
     }
@@ -1351,13 +1371,15 @@ export class FishingMasterGame {
     this.targetPitch = -0.04;
 
     const forward = new THREE.Vector3(-Math.sin(this.yaw), 0, -Math.cos(this.yaw));
+    const isMegalodon = this.activeCatch?.species?.id === "megalodon";
+    const minLaunchDist = isMegalodon ? 6.4 : 4.85;
     const curPos = this.hookedFishActor
       ? this.hookedFishActor.group.position.clone()
-      : this.playerPos.clone().addScaledVector(forward, 4.85);
-    // Guarantee at least 4.5m launch distance so the full jaws-first lunge frames cleanly in front of lens
-    const minLaunch = this.playerPos.clone().addScaledVector(forward, 4.85);
+      : this.playerPos.clone().addScaledVector(forward, minLaunchDist);
+    // Guarantee safe launch distance so the full jaws-first lunge frames cleanly in front of lens
+    const minLaunch = this.playerPos.clone().addScaledVector(forward, minLaunchDist);
     minLaunch.y = -0.35;
-    this.ambushStartPos = curPos.distanceTo(this.playerPos) < 4.5 ? minLaunch : curPos;
+    this.ambushStartPos = curPos.distanceTo(this.playerPos) < (minLaunchDist - 0.35) ? minLaunch : curPos;
     this.ambushStartPos.y = -0.35;
     if (this.hookedFishActor?.setJawOpen) {
       this.hookedFishActor.setJawOpen(0.35);
@@ -1379,7 +1401,7 @@ export class FishingMasterGame {
     this.ui.strikeRing.style.display = "flex";
     this.ui.promptBanner.classList.add("urgent");
     this._setPrompt(
-      "🦈 大白鯊衝出水面直撲你臉而來！！",
+      `🦈 ${this.activeCatch.species.name}衝出水面直撲你臉而來！！`,
       "立刻點擊「⚡ 瞬間電擊！」／右下電擊鈕／按 E 鍵！"
     );
 
@@ -1482,7 +1504,7 @@ export class FishingMasterGame {
     this.shockCooldown = 0;
     this.lightningTimer = 0;
 
-    if (species.id === "great_white_shark") {
+    if (species.isBoss) {
       // Unannounced ambush: keep initial bite & reel tension mysterious until shore!
       this.hookedFishActor.group.position.y = -0.88;
       this.audio.playSplash(1.1);
@@ -1537,7 +1559,7 @@ export class FishingMasterGame {
     const grade = examScore != null ? this._getExamGradeInfo(examScore) : null;
     const examGoldMult = grade ? grade.goldMult : 1.0;
     const examXpMult = grade ? Math.max(1.0, grade.goldMult * 0.85) : 1.0;
-    const killBonus = electrocuted && species.id === "great_white_shark" ? 1.25 : 1.0;
+    const killBonus = electrocuted && species.isBoss ? 1.25 : 1.0;
     const earnedGold = Math.round(species.baseGold * (0.75 + sizeNorm * 0.85) * rankBonus * killBonus * examGoldMult);
     const earnedXp = Math.round(species.xp * rankBonus * killBonus * examXpMult);
     this.coins += earnedGold;
@@ -1562,6 +1584,7 @@ export class FishingMasterGame {
     this.trophyFishActor.group.rotation.y = Math.PI * 0.48;
     this.trophyFishActor.group.position.set(-0.18, 0.02, 0);
     const fitMap = {
+      megalodon: 0.30,
       great_white_shark: 0.44,
       hammerhead_shark: 0.46,
       ocean_sunfish: 0.42,
@@ -1594,8 +1617,8 @@ export class FishingMasterGame {
 
     this.ui.catchSpecies.textContent = `${species.name} (${species.enName})`;
     this.ui.catchBadge.textContent =
-      electrocuted && species.id === "great_white_shark"
-        ? "⚡ 成功電死大白鯊！獲得 1.25x 獵鯊獎勵！"
+      electrocuted && species.isBoss
+        ? `⚡ 成功電死${species.name}！獲得 1.25x 獵鯊獎勵！`
         : `${species.difficulty} · ${rankLabel}`;
     this.ui.catchBadge.style.color = electrocuted ? "#22d3ee" : species.diffColor;
     if (this.ui.catchExamScore) {
@@ -2817,7 +2840,7 @@ export class FishingMasterGame {
       }
     } else if (this.state === "FIGHTING") {
       const sp = this.activeCatch.species;
-      const isShark = sp.id === "great_white_shark";
+      const isShark = Boolean(sp.isBoss);
       const isEel = sp.id === "electric_eel";
       this.shockCooldown = Math.max(0, this.shockCooldown - dt);
 
@@ -2934,12 +2957,13 @@ export class FishingMasterGame {
       const u = THREE.MathUtils.clamp(1 - this.ambushTimer / this.ambushDuration, 0, 1);
       const accel = Math.pow(u, 1.5);
       const forward = new THREE.Vector3(-Math.sin(this.yaw), 0, -Math.cos(this.yaw));
-      const endPos = this.playerPos.clone().addScaledVector(forward, 1.88);
+      const isMegalodon = this.activeCatch?.species?.id === "megalodon";
+      const endPos = this.playerPos.clone().addScaledVector(forward, isMegalodon ? 2.85 : 1.88);
       endPos.y = this.playerPos.y - 0.16;
 
       if (this.hookedFishActor) {
         const fg = this.hookedFishActor.group;
-        this.hookedFishActor.setScaleMultiplier(1.15 + u * 0.25);
+        this.hookedFishActor.setScaleMultiplier((isMegalodon ? 1.0 : 1.15) + u * 0.25);
         fg.position.lerpVectors(this.ambushStartPos, endPos, accel);
         fg.position.y += Math.sin(u * Math.PI) * 0.48;
         // Snout/jaws sit on +Z in TailorRig fish GLBs, so R_y(yaw) faces dead-center toward camera!
@@ -2987,7 +3011,8 @@ export class FishingMasterGame {
         if (this.hookedFishActor?.setJawOpen) {
           this.hookedFishActor.setJawOpen(0);
         }
-        this.coins = Math.max(0, this.coins - 120);
+        const biteLoss = isMegalodon ? 200 : 120;
+        this.coins = Math.max(0, this.coins - biteLoss);
         this._saveProgress();
         this._refreshTopHUD();
         this.audio.playSharkChomp();
@@ -2996,7 +3021,7 @@ export class FishingMasterGame {
         if (this.ui.jawsOverlay) {
           this.ui.jawsOverlay.classList.add("chomp-shut");
         }
-        this._showToast("💥 被衝上岸的大白鯊狠咬一口！損失 120 金幣！");
+        this._showToast(`💥 被衝上岸的${this.activeCatch.species.name}狠咬一口！損失 ${biteLoss} 金幣！`);
         this._releaseApproachingFish();
         setTimeout(() => {
           this._resetToIdle("🦈 被撲咬逃脫！下次見牠衝出水面時瞬間按「⚡ 電擊」！", "");

@@ -116,6 +116,7 @@ export async function loadAllFishingAssets(onProgress) {
     ["sailfishRigged", "outputs/tailorrig/pacific_sailfish_tailorrig.glb", "gltf"],
     ["sunfishRigged", "outputs/tailorrig/ocean_sunfish_tailorrig.glb", "gltf"],
     ["hammerheadRigged", "outputs/tailorrig/hammerhead_shark_tailorrig.glb", "gltf"],
+    ["megalodonRigged", "outputs/tailorrig/megalodon_tailorrig.glb", "gltf"],
     // Core TRELLIS Game Props
     ["pier", "outputs/trellis_outputs/wooden_pier/wooden_pier.glb", "gltf"],
     ["bobber", "outputs/trellis_outputs/fishing_bobber/fishing_bobber.glb", "gltf"],
@@ -176,6 +177,7 @@ export async function loadAllFishingAssets(onProgress) {
       pacific_sailfish: () => createTailorRigFishActor(raw.sailfishRigged, 2.20),
       ocean_sunfish: () => createTailorRigFishActor(raw.sunfishRigged, 1.85),
       hammerhead_shark: () => createTailorRigFishActor(raw.hammerheadRigged, 2.65),
+      megalodon: () => createTailorRigFishActor(raw.megalodonRigged, 4.25, { proceduralOral: false, maxJawRad: 0.92 }),
     },
   };
 }
@@ -914,7 +916,7 @@ function createExamScoreTexture(score) {
  * Stamps the Exam Rod score (1-100) directly onto both flanks of a TailorRig SkinnedMesh fish
  * in bind space so the red ink deforms naturally with swimming bones.
  */
-function applyExamScoreStamp(actorGroup, score) {
+function applyExamScoreStamp(actorGroup, score, boundsOverride = null) {
   const s = Math.max(1, Math.min(100, Math.round(Number(score) || 1)));
   const tex = createExamScoreTexture(s);
   const glowStrength = s >= 80 ? 0.45 + ((s - 80) / 20) * 0.55 : 0.0;
@@ -923,28 +925,35 @@ function applyExamScoreStamp(actorGroup, score) {
     if (!c.isSkinnedMesh || !c.geometry || !c.material) return;
     if (c.name && c.name.startsWith("shark_")) return;
 
-    const posAttr = c.geometry.attributes.position;
-    const ysMid = [];
-    if (posAttr) {
-      for (let i = 0; i < posAttr.count; i++) {
-        const z = posAttr.getZ(i);
-        if (z >= -0.16 && z <= 0.16) {
-          ysMid.push(posAttr.getY(i));
+    let bounds;
+    if (boundsOverride && boundsOverride.isVector4) {
+      bounds = boundsOverride;
+    } else if (Array.isArray(boundsOverride) && boundsOverride.length === 4) {
+      bounds = new THREE.Vector4(...boundsOverride);
+    } else {
+      const posAttr = c.geometry.attributes.position;
+      const ysMid = [];
+      if (posAttr) {
+        for (let i = 0; i < posAttr.count; i++) {
+          const z = posAttr.getZ(i);
+          if (z >= -0.16 && z <= 0.16) {
+            ysMid.push(posAttr.getY(i));
+          }
         }
       }
+      let yLo = -0.08;
+      let yHi = 0.08;
+      if (ysMid.length >= 16) {
+        ysMid.sort((a, b) => a - b);
+        // Use inner 16th-84th percentile to ignore narrow dorsal/pectoral/pelvic fin spikes!
+        yLo = ysMid[Math.floor(ysMid.length * 0.16)];
+        yHi = ysMid[Math.floor(ysMid.length * 0.84)];
+      }
+      const midCenterY = (yLo + yHi) * 0.5 + (yHi - yLo) * 0.08;
+      const halfY = THREE.MathUtils.clamp((yHi - yLo) * 0.44, 0.045, 0.105);
+      const halfZ = Math.min(0.22, halfY * 2.0);
+      bounds = new THREE.Vector4(-0.02 - halfZ, -0.02 + halfZ, midCenterY - halfY, midCenterY + halfY);
     }
-    let yLo = -0.08;
-    let yHi = 0.08;
-    if (ysMid.length >= 16) {
-      ysMid.sort((a, b) => a - b);
-      // Use inner 16th-84th percentile to ignore narrow dorsal/pectoral/pelvic fin spikes!
-      yLo = ysMid[Math.floor(ysMid.length * 0.16)];
-      yHi = ysMid[Math.floor(ysMid.length * 0.84)];
-    }
-    const midCenterY = (yLo + yHi) * 0.5 + (yHi - yLo) * 0.08;
-    const halfY = THREE.MathUtils.clamp((yHi - yLo) * 0.44, 0.045, 0.105);
-    const halfZ = Math.min(0.22, halfY * 2.0);
-    const bounds = new THREE.Vector4(-0.02 - halfZ, -0.02 + halfZ, midCenterY - halfY, midCenterY + halfY);
 
     const srcMats = Array.isArray(c.material) ? c.material : [c.material];
     const patched = srcMats.map((m) => {
@@ -1013,9 +1022,9 @@ vec4 sampleExamScoreInk() {
 
 /**
  * TailorRig Skinned Fish Actor (`*_tailorrig.glb` — 9 bones across 4 kinematic chains,
- * plus 10th `jaw_lower` joint for `great_white_shark`).
+ * plus 10th `jaw_lower` joint for `great_white_shark` and `megalodon`).
  */
-function createTailorRigFishActor(templateScene, baseLengthMeters) {
+function createTailorRigFishActor(templateScene, baseLengthMeters, opts = {}) {
   const clone = SkeletonUtils.clone(templateScene);
   clone.traverse((c) => {
     if (c.isMesh) c.frustumCulled = false;
@@ -1026,7 +1035,17 @@ function createTailorRigFishActor(templateScene, baseLengthMeters) {
     if (b.isBone || b.name) bones[b.name] = b;
   });
 
-  const oralRig = attachSharkOralAnatomy(bones);
+  let oralRig = null;
+  if (opts.proceduralOral !== false) {
+    oralRig = attachSharkOralAnatomy(bones);
+  } else if (bones.jaw_lower) {
+    oralRig = {
+      setJawOpen(open01) {
+        const o = THREE.MathUtils.clamp(open01, 0, 1);
+        bones.jaw_lower.rotation.x = o * (opts.maxJawRad ?? 0.92);
+      },
+    };
+  }
 
   const group = new THREE.Group();
   group.add(clone);
@@ -1042,7 +1061,7 @@ function createTailorRigFishActor(templateScene, baseLengthMeters) {
       if (oralRig) oralRig.setJawOpen(open01);
     },
     setExamScore(score) {
-      applyExamScoreStamp(group, score);
+      applyExamScoreStamp(group, score, opts.examBounds || null);
     },
     updateSwim(timeSec, speed = 4.5, yawAmp = 0.22) {
       const p = timeSec * speed;
