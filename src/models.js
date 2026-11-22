@@ -248,8 +248,21 @@ function buildPierAsset(pierScene) {
 function buildTailorRigRodController(rodScene, rodScale = 2.05) {
   const root = new THREE.Group();
   const model = SkeletonUtils.clone(rodScene);
+  const blackMats = [];
+  const accentMats = [];
   model.traverse((c) => {
-    if (c.isMesh) c.frustumCulled = false;
+    if (c.isMesh) {
+      c.frustumCulled = false;
+      if (c.material) {
+        const cloned = Array.isArray(c.material) ? c.material.map((m) => m.clone()) : c.material.clone();
+        c.material = cloned;
+        const list = Array.isArray(cloned) ? cloned : [cloned];
+        for (const m of list) {
+          if (/black/i.test(m.name || "")) blackMats.push(m);
+          else accentMats.push(m);
+        }
+      }
+    }
   });
 
   // Shift so `rod_grip` (z = +0.34) sits at local origin of `root`
@@ -262,9 +275,9 @@ function buildTailorRigRodController(rodScene, rodScale = 2.05) {
     if (b.isBone || b.name) bones[b.name] = b;
   });
 
-  // Locator nodes on handle grip (Right Hand IK), butt cap & spinning reel crank (Left Hand IK)
+  // Offset wrist anchor slightly back & right so PALM & CURLED FINGERS wrap squarely around the black handle
   const rightGripAnchor = new THREE.Object3D();
-  rightGripAnchor.position.set(0.0, 0.004, 0.00);
+  rightGripAnchor.position.set(0.016, -0.014, 0.044);
   if (bones.rod_grip) bones.rod_grip.add(rightGripAnchor);
 
   const leftButtAnchor = new THREE.Object3D();
@@ -280,6 +293,35 @@ function buildTailorRigRodController(rodScene, rodScale = 2.05) {
   return {
     group: root,
     bones,
+    setRodStyle(rodId = "lure_red") {
+      const isExam = rodId === "exam_rod";
+      for (const m of accentMats) {
+        if (isExam) {
+          m.color.setHex(0xfbbf24);
+          if ("emissive" in m) m.emissive.setHex(0x3b2400);
+          if ("metalness" in m) m.metalness = 0.72;
+          if ("roughness" in m) m.roughness = 0.20;
+        } else {
+          m.color.setHex(0x8f120e);
+          if ("emissive" in m) m.emissive.setHex(0x000000);
+          if ("metalness" in m) m.metalness = 0.48;
+          if ("roughness" in m) m.roughness = 0.26;
+        }
+        m.needsUpdate = true;
+      }
+      for (const m of blackMats) {
+        if (isExam) {
+          m.color.setHex(0x1e293b);
+          if ("metalness" in m) m.metalness = 0.20;
+          if ("roughness" in m) m.roughness = 0.48;
+        } else {
+          m.color.setHex(0x111318);
+          if ("metalness" in m) m.metalness = 0.14;
+          if ("roughness" in m) m.roughness = 0.54;
+        }
+        m.needsUpdate = true;
+      }
+    },
     setBend(downwardBend, sideBend = 0) {
       // Distribute smooth parabolic skeletal rotation across the 3 blank bones!
       const b1 = bones.rod_blank_01;
@@ -421,25 +463,31 @@ function buildTailorRigArmsController(armsScene) {
     if (b.isBone || b.name) bones[b.name] = b;
   });
 
-  // Curl fingers into a natural cylindrical rod grip!
-  const curlSideFingers = (suffix, curlAmount = 0.68) => {
+  // Curl fingers into a firm cylindrical fist around the rod handle!
+  const curlSideFingers = (suffix, curlAmount = 0.78) => {
+    const segMult = { "01": 1.45, "02": 1.65, "03": 1.25 };
     for (const fname of ["index", "middle", "ring", "pinky"]) {
       for (const seg of ["01", "02", "03"]) {
         const match = Object.keys(bones).find((k) => k.startsWith(`${fname}_${seg}_${suffix}`));
         if (match && bones[match]) {
-          bones[match].rotation.x = curlAmount;
+          bones[match].rotation.x = curlAmount * segMult[seg];
         }
       }
+    }
+    const t01 = Object.keys(bones).find((k) => k.startsWith(`thumb_01_${suffix}`));
+    if (t01 && bones[t01]) {
+      bones[t01].rotation.x = curlAmount * 0.65;
+      bones[t01].rotation.z = suffix === "r" ? -0.35 : 0.35;
     }
     for (const seg of ["02", "03"]) {
       const tMatch = Object.keys(bones).find((k) => k.startsWith(`thumb_${seg}_${suffix}`));
       if (tMatch && bones[tMatch]) {
-        bones[tMatch].rotation.x = curlAmount * 0.55;
+        bones[tMatch].rotation.x = curlAmount * 0.85;
       }
     }
   };
-  curlSideFingers("r", 0.72);
-  curlSideFingers("l", 0.62);
+  curlSideFingers("r", 0.92);
+  curlSideFingers("l", 0.66);
 
   const rightPoleLocal = new THREE.Vector3(0.36, -0.46, -0.12);
   const leftPoleLocal = new THREE.Vector3(-0.36, -0.46, -0.12);
@@ -465,9 +513,9 @@ function buildTailorRigArmsController(armsScene) {
           rightPoleWorld,
           -0.18
         );
-        // Align right wrist cleanly along rod shaft
+        // Align right wrist & palm inward so curled fingers clamp tightly around grip
         rodDirTip.copy(rodTipWorld);
-        aimBonePlusYAtWorldPoint(bones.hand_r_022, rodDirTip, -0.42);
+        aimBonePlusYAtWorldPoint(bones.hand_r_022, rodDirTip, -0.78);
       }
 
       if (bones.upperarm_l_02 && bones.lowerarm_l_03 && bones.hand_l_04) {
@@ -485,7 +533,7 @@ function buildTailorRigArmsController(armsScene) {
           isCrankingReel ? 0.95 : 0.65
         );
       }
-      curlSideFingers("r", 0.78);
+      curlSideFingers("r", 0.92);
       curlSideFingers("l", isCrankingReel ? 0.85 : 0.66);
     },
   };

@@ -306,7 +306,14 @@ def rig_fishing_rod():
     # R_x(180°): (x, y, z) -> (x, -y, -z) maps handle -> +Z, tip -> -Z, reel/guides -> -Y, crank -> -X
     for pr in prims:
         pts = read_vec3_accessor(gltf, blob, pr["attributes"]["POSITION"])
-        rot_pts = [[p[0] * scale, -p[1] * scale, -(p[2] - cz) * scale] for p in pts]
+        rot_pts = []
+        for p in pts:
+            rx, ry, rz = p[0] * scale, -p[1] * scale, -(p[2] - cz) * scale
+            # Gently thicken black grip handle so it fills a clenched first-person fist cleanly
+            if rz > 0.255 and ry > -0.015:
+                rx *= 1.30
+                ry *= 1.30
+            rot_pts.append([rx, ry, rz])
         write_vec3_accessor_in_place(gltf, blob, pr["attributes"]["POSITION"], rot_pts)
         if "NORMAL" in pr["attributes"]:
             nrms = read_vec3_accessor(gltf, blob, pr["attributes"]["NORMAL"])

@@ -374,6 +374,23 @@ const BAITS = [
   },
 ];
 
+const RODS = [
+  {
+    id: "lure_red",
+    name: "紅黑路亞釣竿",
+    isExamRod: false,
+    cost: 0,
+    desc: "經典 Quaternius 紅黑輕量化碳纖路亞竿，手感平衡穩健，適合全魚種入門與進階實戰。",
+  },
+  {
+    id: "exam_rod",
+    name: "🎓 考試釣竿",
+    isExamRod: true,
+    cost: 6800,
+    desc: "極其昂貴的傳奇黃金評分神竿！釣起的每一種魚都會標記 1～100 分等級，分數越高魚體變得越龐大、賞金暴增且綻放尊榮金光！",
+  },
+];
+
 const ENV_ORDER = ["lakeside", "pier", "alpine"];
 const ENV_TITLES = {
   lakeside: "翡翠湖 · 森林湖畔",
@@ -404,6 +421,8 @@ export class FishingMasterGame {
     this.xp = saved.xp ?? 0;
     this.unlockedBaits = new Set(saved.unlockedBaits ?? ["earthworm"]);
     this.activeBaitId = saved.activeBaitId ?? "earthworm";
+    this.unlockedRods = new Set(saved.unlockedRods ?? ["lure_red"]);
+    this.activeRodId = saved.activeRodId ?? "lure_red";
     this.compendium = saved.compendium ?? {};
     this.localLeaderboard = saved.localLeaderboard ?? [
       { player_id: "seed-1", player_name: "翡翠老船長", species_id: "great_white_shark", species_name: "狂暴大白鯊", weight_kg: 184.5, coins: 6850, level: 6, total_catches: 24 },
@@ -546,6 +565,7 @@ export class FishingMasterGame {
       catchModal: $("catch-modal"),
       catchSpecies: $("catch-species"),
       catchBadge: $("catch-badge"),
+      catchExamScore: $("catch-exam-score"),
       catchWeight: $("catch-weight"),
       catchGold: $("catch-gold"),
       catchXp: $("catch-xp"),
@@ -579,6 +599,8 @@ export class FishingMasterGame {
           xp: this.xp,
           unlockedBaits: Array.from(this.unlockedBaits),
           activeBaitId: this.activeBaitId,
+          unlockedRods: Array.from(this.unlockedRods),
+          activeRodId: this.activeRodId,
           compendium: this.compendium,
           localLeaderboard: this.localLeaderboard,
         })
@@ -639,7 +661,7 @@ export class FishingMasterGame {
     this.camera.add(this.fpRig);
 
     this.rodPivot = new THREE.Group();
-    this.rodPivot.position.set(0.16, -0.27, -0.38);
+    this.rodPivot.position.set(0.14, -0.22, -0.45);
     this.rodPivot.rotation.set(0.40, 0.10, 0.0);
     this.fpRig.add(this.rodPivot);
 
@@ -943,6 +965,7 @@ export class FishingMasterGame {
 
     // 2. TailorRig 2-chain Skinned Fishing Rod (`rod_blank` + isolated `reel_aux`)
     this.rodCtrl = this.assets.rodController;
+    this.rodCtrl.setRodStyle(this.activeRodId);
     this.rodPivot.add(this.rodCtrl.group);
 
     // 3. Bobber + Dangling Earthworm Bait
@@ -1408,10 +1431,27 @@ export class FishingMasterGame {
     this.ui.combatPanel.classList.add("is-visible");
 
     const species = this.pendingSpecies || this._pickTargetFishSpecies();
-    const u = Math.pow(Math.random(), species.weightPower);
-    const weightKg = +(species.minKg + u * (species.maxKg - species.minKg)).toFixed(2);
-    const sizeNorm = (weightKg - species.minKg) / (species.maxKg - species.minKg);
-    this.activeCatch = { species, weightKg, sizeNorm };
+    const isExamRod = this.activeRodId === "exam_rod";
+    let examScore = null;
+    let sizeNorm;
+    let weightKg;
+    let examScaleBoost = 1.0;
+
+    if (isExamRod) {
+      examScore = Math.max(1, Math.min(100, Math.round(1 + Math.pow(Math.random(), 0.85) * 99)));
+      const scoreNorm = (examScore - 1) / 99;
+      sizeNorm = Math.min(1.0, scoreNorm * 0.88 + Math.random() * 0.12);
+      weightKg = +(
+        species.minKg +
+        sizeNorm * (species.maxKg - species.minKg) * (0.85 + scoreNorm * 0.50)
+      ).toFixed(2);
+      examScaleBoost = 0.72 + scoreNorm * 0.88;
+    } else {
+      const u = Math.pow(Math.random(), species.weightPower);
+      weightKg = +(species.minKg + u * (species.maxKg - species.minKg)).toFixed(2);
+      sizeNorm = (weightKg - species.minKg) / (species.maxKg - species.minKg);
+    }
+    this.activeCatch = { species, weightKg, sizeNorm, examScore, examScaleBoost };
 
     if (this.approachingPoolEntry) {
       this.approachingPoolEntry.busy = false;
@@ -1420,7 +1460,7 @@ export class FishingMasterGame {
     }
 
     this.hookedFishActor = this.assets.fishFactory[species.id]();
-    this.hookedFishActor.setScaleMultiplier(0.85 + sizeNorm * 0.45);
+    this.hookedFishActor.setScaleMultiplier((0.85 + sizeNorm * 0.45) * examScaleBoost);
     this.hookedFishActor.group.position.set(this.bobberRig.position.x, -0.22, this.bobberRig.position.z);
     this.scene.add(this.hookedFishActor.group);
 
@@ -1480,7 +1520,7 @@ export class FishingMasterGame {
       this.hookedFishActor = null;
     }
 
-    const { species, weightKg, sizeNorm } = this.activeCatch;
+    const { species, weightKg, sizeNorm, examScore } = this.activeCatch;
     let rankLabel = "標準體型";
     let rankBonus = 1.0;
     if (sizeNorm > 0.86) {
@@ -1491,22 +1531,26 @@ export class FishingMasterGame {
       rankBonus = 1.3;
     }
 
+    const grade = examScore != null ? this._getExamGradeInfo(examScore) : null;
+    const examGoldMult = grade ? grade.goldMult : 1.0;
+    const examXpMult = grade ? Math.max(1.0, grade.goldMult * 0.85) : 1.0;
     const killBonus = electrocuted && species.id === "great_white_shark" ? 1.25 : 1.0;
-    const earnedGold = Math.round(species.baseGold * (0.75 + sizeNorm * 0.85) * rankBonus * killBonus);
-    const earnedXp = Math.round(species.xp * rankBonus * killBonus);
+    const earnedGold = Math.round(species.baseGold * (0.75 + sizeNorm * 0.85) * rankBonus * killBonus * examGoldMult);
+    const earnedXp = Math.round(species.xp * rankBonus * killBonus * examXpMult);
     this.coins += earnedGold;
     this.xp += earnedXp;
 
-    const prev = this.compendium[species.id] || { count: 0, maxKg: 0 };
+    const prev = this.compendium[species.id] || { count: 0, maxKg: 0, bestScore: 0 };
     const isNewRecord = weightKg > prev.maxKg;
     this.compendium[species.id] = {
       count: prev.count + 1,
       maxKg: Math.max(prev.maxKg, weightKg),
+      bestScore: examScore != null ? Math.max(prev.bestScore || 0, examScore) : (prev.bestScore || 0),
     };
     this._saveProgress();
     this._refreshTopHUD();
     this._submitCatchToLeaderboard({ species, weightKg });
-    this._broadcastCatch(species, weightKg, electrocuted);
+    this._broadcastCatch(species, weightKg, electrocuted, examScore);
 
     while (this.trophyStageGroup.children.length > 0) {
       this.trophyStageGroup.remove(this.trophyStageGroup.children[0]);
@@ -1534,7 +1578,25 @@ export class FishingMasterGame {
       red_bellied_piranha: 1.38,
       blue_tang: 1.45,
     };
-    this.trophyFishActor.setScaleMultiplier(fitMap[species.id] || 1.1);
+    const examTrophyScale = examScore != null ? 0.74 + ((examScore - 1) / 99) * 0.54 : 1.0;
+    this.trophyFishActor.setScaleMultiplier((fitMap[species.id] || 1.1) * examTrophyScale);
+    if (examScore != null && examScore >= 80) {
+      const glowStrength = 0.45 + ((examScore - 80) / 20) * 0.55;
+      this.trophyFishActor.group.traverse((c) => {
+        if (c.isMesh && c.material) {
+          const mats = Array.isArray(c.material) ? c.material : [c.material];
+          const cloned = mats.map((m) => {
+            const cm = m.clone();
+            if ("emissive" in cm) {
+              cm.emissive.setHex(0x3a2500);
+              cm.emissiveIntensity = glowStrength;
+            }
+            return cm;
+          });
+          c.material = Array.isArray(c.material) ? cloned : cloned[0];
+        }
+      });
+    }
     this.trophyStageGroup.add(this.trophyFishActor.group);
 
     this.trophyCoinMesh = this.assets.coinTemplate.clone();
@@ -1547,6 +1609,17 @@ export class FishingMasterGame {
         ? "⚡ 成功電死大白鯊！獲得 1.25x 獵鯊獎勵！"
         : `${species.difficulty} · ${rankLabel}`;
     this.ui.catchBadge.style.color = electrocuted ? "#22d3ee" : species.diffColor;
+    if (this.ui.catchExamScore) {
+      if (examScore != null && grade) {
+        this.ui.catchExamScore.textContent = `📝 考試評分：${examScore} / 100 分 · ${grade.label}`;
+        this.ui.catchExamScore.style.color = grade.color;
+        this.ui.catchExamScore.style.background = grade.bg;
+        this.ui.catchExamScore.style.border = `1px solid ${grade.border}`;
+        this.ui.catchExamScore.style.display = "inline-block";
+      } else {
+        this.ui.catchExamScore.style.display = "none";
+      }
+    }
     this.ui.catchWeight.textContent = `${weightKg.toFixed(2)} kg`;
     this.ui.catchGold.textContent = `+${earnedGold} 金幣`;
     this.ui.catchXp.textContent = `+${earnedXp} XP`;
@@ -1594,6 +1667,25 @@ export class FishingMasterGame {
     this._toastTimer = setTimeout(() => this.ui.toast.classList.remove("show"), 2600);
   }
 
+  _getExamGradeInfo(score) {
+    if (score >= 100) {
+      return { label: "👑 滿分狀元 · SSS", color: "#fbbf24", bg: "rgba(251,191,36,0.22)", border: "#fbbf24", goldMult: 2.4 };
+    }
+    if (score >= 90) {
+      return { label: "🌟 優等特級 · S", color: "#f59e0b", bg: "rgba(245,158,11,0.20)", border: "#f59e0b", goldMult: 1.9 };
+    }
+    if (score >= 75) {
+      return { label: "✨ 優良高分 · A", color: "#38bdf8", bg: "rgba(56,189,248,0.18)", border: "#38bdf8", goldMult: 1.45 };
+    }
+    if (score >= 60) {
+      return { label: "✅ 成績及格 · B", color: "#34d399", bg: "rgba(52,211,153,0.16)", border: "#34d399", goldMult: 1.15 };
+    }
+    if (score >= 30) {
+      return { label: "📝 尚待加強 · C", color: "#fb923c", bg: "rgba(251,146,60,0.16)", border: "#fb923c", goldMult: 0.95 };
+    }
+    return { label: "💀 成績不及格 · D", color: "#f87171", bg: "rgba(248,113,113,0.16)", border: "#f87171", goldMult: 0.8 };
+  }
+
   _refreshTopHUD() {
     this.ui.coins.textContent = this.coins.toLocaleString();
     const { level, progress, title } = this._getLevelInfo();
@@ -1603,7 +1695,7 @@ export class FishingMasterGame {
     }
     this.ui.xpFill.style.width = `${Math.round(progress * 100)}%`;
     const bait = BAITS.find((b) => b.id === this.activeBaitId) || BAITS[0];
-    this.ui.baitName.textContent = bait.name;
+    this.ui.baitName.textContent = this.activeRodId === "exam_rod" ? `🎓 ${bait.name}` : bait.name;
   }
 
   _openCompendiumDrawer() {
@@ -1633,7 +1725,8 @@ export class FishingMasterGame {
             ${
               rec
                 ? `<div class="tabular" style="color:#34d399;font-weight:800;font-size:13.5px;">已獲 ${rec.count} 尾</div>
-                   <div class="tabular" style="font-size:11.5px;color:#fbbf24;margin-top:2px;">最大 ${rec.maxKg.toFixed(2)} kg</div>`
+                   <div class="tabular" style="font-size:11.5px;color:#fbbf24;margin-top:2px;">最大 ${rec.maxKg.toFixed(2)} kg</div>
+                   ${rec.bestScore ? `<div class="tabular" style="font-size:11.5px;color:#38bdf8;margin-top:2px;">最高評分 ${rec.bestScore}/100</div>` : ""}`
                 : `<div style="color:#64748b;font-size:12.5px;">尚未釣獲</div>`
             }
           </div>
@@ -1845,25 +1938,57 @@ export class FishingMasterGame {
       .join("");
   }
 
-  _openBaitDrawer() {
-    this.ui.drawerTitle.textContent = "🪱 釣具箱 · 切換魚餌";
-    this.ui.drawerBody.innerHTML = BAITS.map((b) => {
-      const owned = this.unlockedBaits.has(b.id);
-      const equipped = this.activeBaitId === b.id;
-      return `
-        <div class="drawer-item">
-          <div>
-            <div style="font-size:16px;font-weight:700;">${b.name} ${equipped ? '<span style="color:#34d399;font-size:12px;">[使用中]</span>' : ""}</div>
-            <div style="font-size:13px;color:#cbd5e1;margin-top:3px;">${b.desc}</div>
-          </div>
-          <div>
-            <button class="action-chip" data-bait="${b.id}">
-              ${equipped ? "已裝備" : owned ? "切換裝備" : `🪙 ${b.cost} 解鎖`}
-            </button>
-          </div>
-        </div>
-      `;
-    }).join("");
+  _openBaitDrawer(tab = "bait") {
+    this.ui.drawerTitle.textContent = "🧰 釣具箱 · 魚餌與釣竿商店";
+    const tabsHtml = `
+      <div class="lb-tabs">
+        <button class="lb-tab ${tab === "bait" ? "active" : ""}" data-gear-tab="bait" type="button">🪱 魚餌商店</button>
+        <button class="lb-tab ${tab === "rod" ? "active" : ""}" data-gear-tab="rod" type="button">🎣 釣竿商店</button>
+      </div>
+    `;
+
+    const listHtml =
+      tab === "rod"
+        ? RODS.map((r) => {
+            const owned = this.unlockedRods.has(r.id);
+            const equipped = this.activeRodId === r.id;
+            return `
+              <div class="drawer-item">
+                <div>
+                  <div style="font-size:16px;font-weight:700;color:${r.isExamRod ? "#fbbf24" : "#f8fafc"};">${r.name} ${equipped ? '<span style="color:#34d399;font-size:12px;">[使用中]</span>' : ""}</div>
+                  <div style="font-size:13px;color:#cbd5e1;margin-top:3px;">${r.desc}</div>
+                </div>
+                <div>
+                  <button class="action-chip" data-rod="${r.id}">
+                    ${equipped ? "已裝備" : owned ? "切換裝備" : `🪙 ${r.cost.toLocaleString()} 解鎖`}
+                  </button>
+                </div>
+              </div>
+            `;
+          }).join("")
+        : BAITS.map((b) => {
+            const owned = this.unlockedBaits.has(b.id);
+            const equipped = this.activeBaitId === b.id;
+            return `
+              <div class="drawer-item">
+                <div>
+                  <div style="font-size:16px;font-weight:700;">${b.name} ${equipped ? '<span style="color:#34d399;font-size:12px;">[使用中]</span>' : ""}</div>
+                  <div style="font-size:13px;color:#cbd5e1;margin-top:3px;">${b.desc}</div>
+                </div>
+                <div>
+                  <button class="action-chip" data-bait="${b.id}">
+                    ${equipped ? "已裝備" : owned ? "切換裝備" : `🪙 ${b.cost} 解鎖`}
+                  </button>
+                </div>
+              </div>
+            `;
+          }).join("");
+
+    this.ui.drawerBody.innerHTML = tabsHtml + listHtml;
+
+    this.ui.drawerBody.querySelectorAll("[data-gear-tab]").forEach((btn) => {
+      btn.onclick = () => this._openBaitDrawer(btn.getAttribute("data-gear-tab"));
+    });
 
     this.ui.drawerBody.querySelectorAll("[data-bait]").forEach((btn) => {
       btn.onclick = () => {
@@ -1880,9 +2005,34 @@ export class FishingMasterGame {
         this.activeBaitId = id;
         this._saveProgress();
         this._refreshTopHUD();
-        this._openBaitDrawer();
+        this._openBaitDrawer("bait");
       };
     });
+
+    this.ui.drawerBody.querySelectorAll("[data-rod]").forEach((btn) => {
+      btn.onclick = () => {
+        const id = btn.getAttribute("data-rod");
+        const rod = RODS.find((x) => x.id === id);
+        if (!rod) return;
+        if (!this.unlockedRods.has(id)) {
+          if (this.coins < rod.cost) {
+            this._showToast(`金幣不足！還需 🪙 ${(rod.cost - this.coins).toLocaleString()} 才能解鎖 ${rod.name}`);
+            return;
+          }
+          this.coins -= rod.cost;
+          this.unlockedRods.add(id);
+          this._showToast(`🎉 已購得 ${rod.name}！釣到的魚皆會獲得 1～100 分評級！`);
+        } else {
+          this._showToast(`已裝備 ${rod.name}`);
+        }
+        this.activeRodId = id;
+        if (this.rodCtrl?.setRodStyle) this.rodCtrl.setRodStyle(id);
+        this._saveProgress();
+        this._refreshTopHUD();
+        this._openBaitDrawer("rod");
+      };
+    });
+
     this.ui.drawerModal.style.display = "flex";
   }
 
@@ -2176,13 +2326,14 @@ export class FishingMasterGame {
     this._sendMpPacket({ type: "state", ...st });
   }
 
-  _broadcastCatch(species, weightKg, electrocuted = false) {
+  _broadcastCatch(species, weightKg, electrocuted = false, examScore = null) {
     if (!this.mpEnabled || !species) return;
     const payload = {
       speciesId: species.id,
       speciesName: species.name,
       weightKg,
       electrocuted,
+      examScore,
       name: this.playerName,
     };
     if (!this._sendMpPacket({ type: "catch", ...payload }) && this.mpTransport === "http") {
@@ -2242,7 +2393,8 @@ export class FishingMasterGame {
     const peer = this.remotePlayers.get(ev.playerId);
     const name = ev.name || peer?.data?.name || "釣友";
     if (ev.kind === "catch") {
-      const text = `${ev.electrocuted ? "⚡ 電斬 " : "🎉 釣獲 "}${ev.speciesName} ${Number(ev.weightKg || 0).toFixed(1)}kg！`;
+      const scoreTag = ev.examScore != null ? ` 🎓${ev.examScore}分` : "";
+      const text = `${ev.electrocuted ? "⚡ 電斬 " : "🎉 釣獲 "}${ev.speciesName} ${Number(ev.weightKg || 0).toFixed(1)}kg${scoreTag}！`;
       if (peer?.actor) peer.actor.showBubble(text, 5.0);
       this._showToast(`🐟 ${name} ${text}`);
     } else if (ev.kind === "emote" && ev.text) {

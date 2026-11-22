@@ -1,24 +1,24 @@
 import { DurableObject } from "cloudflare:workers";
 
 const SPECIES_LIMITS = {
-  largemouth_bass: { name: "鱸魚", maxKg: 3.5 },
-  blue_tang: { name: "帝王藍倒吊", maxKg: 2.0 },
-  rainbow_trout: { name: "虹鱒", maxKg: 6.0 },
-  red_bellied_piranha: { name: "紅腹食人魚", maxKg: 3.8 },
-  common_carp: { name: "鯉魚", maxKg: 8.5 },
-  sockeye_salmon: { name: "紅鮭魚", maxKg: 8.0 },
-  red_lionfish: { name: "絢麗獅子魚", maxKg: 3.5 },
-  golden_arowana: { name: "傳奇金龍魚", maxKg: 9.5 },
-  northern_pike: { name: "狗魚", maxKg: 16.0 },
-  mahi_mahi: { name: "黃金鬼頭刀", maxKg: 24.0 },
-  wels_catfish: { name: "巨型湖鯰", maxKg: 34.0 },
-  yellowfin_tuna: { name: "黃鰭鮪魚", maxKg: 95.0 },
-  electric_eel: { name: "巨型電鰻", maxKg: 24.0 },
-  beluga_sturgeon: { name: "史前巨鱘", maxKg: 205.0 },
-  pacific_sailfish: { name: "雨傘旗魚", maxKg: 108.0 },
-  ocean_sunfish: { name: "巨型翻車魚", maxKg: 270.0 },
-  hammerhead_shark: { name: "巨型雙髻鯊", maxKg: 320.0 },
-  great_white_shark: { name: "狂暴大白鯊", maxKg: 380.0 },
+  largemouth_bass: { name: "鱸魚", maxKg: 5.5 },
+  blue_tang: { name: "帝王藍倒吊", maxKg: 3.0 },
+  rainbow_trout: { name: "虹鱒", maxKg: 9.0 },
+  red_bellied_piranha: { name: "紅腹食人魚", maxKg: 5.5 },
+  common_carp: { name: "鯉魚", maxKg: 12.5 },
+  sockeye_salmon: { name: "紅鮭魚", maxKg: 11.5 },
+  red_lionfish: { name: "絢麗獅子魚", maxKg: 5.0 },
+  golden_arowana: { name: "傳奇金龍魚", maxKg: 14.0 },
+  northern_pike: { name: "狗魚", maxKg: 23.5 },
+  mahi_mahi: { name: "黃金鬼頭刀", maxKg: 35.0 },
+  wels_catfish: { name: "巨型湖鯰", maxKg: 49.5 },
+  yellowfin_tuna: { name: "黃鰭鮪魚", maxKg: 138.0 },
+  electric_eel: { name: "巨型電鰻", maxKg: 35.0 },
+  beluga_sturgeon: { name: "史前巨鱘", maxKg: 298.0 },
+  pacific_sailfish: { name: "雨傘旗魚", maxKg: 158.0 },
+  ocean_sunfish: { name: "巨型翻車魚", maxKg: 392.0 },
+  hammerhead_shark: { name: "巨型雙髻鯊", maxKg: 465.0 },
+  great_white_shark: { name: "狂暴大白鯊", maxKg: 550.0 },
 };
 
 const CORS_HEADERS = {
@@ -370,6 +370,8 @@ export class FishingRoom extends DurableObject {
       const spec = SPECIES_LIMITS[msg.speciesId];
       const w = Number(msg.weightKg);
       if (!Number.isFinite(w) || w < 0.05 || w > spec.maxKg) return;
+      const rawScore = Number(msg.examScore);
+      const examScore = Number.isInteger(rawScore) && rawScore >= 1 && rawScore <= 100 ? rawScore : null;
       const event = {
         kind: "catch",
         playerId: att.playerId,
@@ -378,6 +380,7 @@ export class FishingRoom extends DurableObject {
         speciesName: spec.name,
         weightKg: Math.round(w * 100) / 100,
         electrocuted: Boolean(msg.electrocuted),
+        examScore,
         ts: Date.now(),
       };
       this._broadcast({ type: "room_event", event }, ws);
